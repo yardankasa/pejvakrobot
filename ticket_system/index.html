@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مرکز پشتیبانی</title>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js?61"></script>
+  <!-- Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    /* =====================
+       Theme Tokens (Light/Dark from Telegram)
+       ===================== */
+    :root {
+      --tg-theme-bg-color-light: #f7f7f8;
+      --tg-theme-text-color-light: #0f172a;
+      --tg-theme-hint-color-light: #6b7280;
+      --tg-theme-link-color-light: #2563eb;
+      --tg-theme-button-color-light: #2563eb;
+      --tg-theme-button-text-color-light: #ffffff;
+      --tg-theme-secondary-bg-color-light: #eef2f7;
+      --tg-theme-header-bg-color-light: #ffffff;
+      --tg-theme-section-bg-color-light: #ffffff;
+      --tg-theme-subtitle-text-color-light: #475569;
+      --tg-theme-destructive-text-color-light: #ef4444;
+
+      --tg-theme-bg-color-dark: #0d0d0f;
+      --tg-theme-text-color-dark: #f1f5f9;
+      --tg-theme-hint-color-dark: #a1a1aa;
+      --tg-theme-link-color-dark: #60a5fa;
+      --tg-theme-button-color-dark: #3b82f6;
+      --tg-theme-button-text-color-dark: #ffffff;
+      --tg-theme-secondary-bg-color-dark: #17171b;
+      --tg-theme-header-bg-color-dark: #17171b;
+      --tg-theme-section-bg-color-dark: #151518;
+      --tg-theme-subtitle-text-color-dark: #cbd5e1;
+      --tg-theme-destructive-text-color-dark: #f87171;
+
+      /* Motion */
+      --ease-snappy: cubic-bezier(.2,.8,.2,1);
+    }
+
+    body {
+      font-family: 'Vazirmatn', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif;
+      background: var(--tg-theme-bg-color);
+      color: var(--tg-theme-text-color);
+      transition: background .3s var(--ease-snappy), color .3s var(--ease-snappy);
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Loaders */
+    .loader { border-top-color: transparent; border-style: solid; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Micro-interactions */
+    .btn { transition: transform .12s var(--ease-snappy), box-shadow .2s var(--ease-snappy), opacity .2s; }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); opacity: .9; }
+
+    /* Status Badges */
+    .status-badge { padding: 4px 12px; border-radius: 9999px; font-size: .8rem; font-weight: 600; }
+    .status-open { background: #f59e0b; color: #fff; }
+    .status-answered { background: #3b82f6; color: #fff; }
+    .status-closed { background: #6b7280; color: #fff; }
+
+    /* Chat bubbles */
+    .message-user { background: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color); border-radius: 18px 4px 18px 18px; }
+    .message-admin { background: var(--tg-theme-secondary-bg-color); color: var(--tg-theme-text-color); border-radius: 4px 18px 18px 18px; }
+    .message-time { color: var(--tg-theme-hint-color); font-size: .75rem; }
+
+    /* Cards */
+    .section-bg { background: var(--tg-theme-section-bg-color); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.06); }
+
+    input, select, textarea { background: var(--tg-theme-secondary-bg-color) !important; color: var(--tg-theme-text-color) !important; border-color: var(--tg-theme-hint-color) !important; }
+    input::placeholder, textarea::placeholder { color: var(--tg-theme-hint-color) !important; opacity: .9; }
+
+    /* Pagination */
+    .pagination-button { background: var(--tg-theme-secondary-bg-color); color: var(--tg-theme-text-color); transition: all .15s var(--ease-snappy); }
+    .pagination-button.active { background: var(--tg-theme-button-color); color: var(--tg-theme-button-text-color); }
+
+    /* Animations */
+    .anim-fade-in { animation: fade-in .24s var(--ease-snappy); }
+    .anim-scale-in { animation: scale-in .18s var(--ease-snappy); }
+    .anim-slide-up { animation: slide-up .24s var(--ease-snappy); }
+    @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes scale-in { from { transform: scale(.98); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+    @keyframes slide-up { from { transform: translateY(8px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+    /* Skeleton shimmer */
+    .skeleton { position: relative; overflow: hidden; background: linear-gradient(90deg, rgba(200,200,200,.08), rgba(200,200,200,.18), rgba(200,200,200,.08)); background-size: 200% 100%; animation: shimmer 1s linear infinite; }
+    @keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+
+    /* Typing dots */
+    .dot-flashing { position: relative; width: 10px; height: 10px; border-radius: 5px; background: var(--tg-theme-button-color); animation: dotFlashing 1s infinite linear alternate; animation-delay: .5s; }
+    .dot-flashing::before, .dot-flashing::after { content: ''; position: absolute; top: 0; width: 10px; height: 10px; border-radius: 5px; background: var(--tg-theme-button-color); }
+    .dot-flashing::before { left: -15px; animation: dotFlashing 1s infinite alternate; }
+    .dot-flashing::after { left: 15px; animation: dotFlashing 1s infinite alternate; animation-delay: 1s; }
+    @keyframes dotFlashing { 0% { background: var(--tg-theme-button-color); } 50%, 100% { background: rgba(59,130,246,.2); } }
+
+    /* Lightbox */
+    .lightbox-img { max-height: 80vh; max-width: 90vw; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+
+    /* Focus outline for a11y */
+    :focus-visible { outline: 2px solid var(--tg-theme-link-color); outline-offset: 2px; border-radius: 10px; }
+  </style>
+</head>
+<body class="flex flex-col h-screen">
+  <!-- Global Loading Spinner -->
+  <div id="loading-spinner" class="fixed inset-0 flex items-center justify-center z-[60] hidden bg-black/10">
+    <div class="loader border-4" style="width:42px;height:42px;border-color:var(--tg-theme-button-color)"></div>
+  </div>
+
+  <!-- Toasts -->
+  <div id="toast-container" aria-live="polite" class="fixed top-4 right-4 left-4 md:left-auto z-[70] space-y-2"></div>
+
+  <!-- Offline Banner -->
+  <div id="offline-banner" class="hidden sticky top-0 z-40 w-full bg-amber-500 text-white px-3 py-2 text-sm text-center">اتصال اینترنت قطع است. برخی قابلیت‌ها کار نخواهند کرد…</div>
+
+  <!-- Modal (Headless) -->
+  <div id="modal-overlay" class="fixed inset-0 hidden z-[80] items-end md:items-center justify-center bg-black/50 anim-fade-in" role="dialog" aria-modal="true">
+    <div id="modal-card" class="w-full md:w-[520px] bg-[var(--tg-theme-section-bg-color)] rounded-t-2xl md:rounded-2xl p-4 md:p-6 anim-slide-up" role="document">
+      <div class="flex items-start justify-between mb-3">
+        <h3 id="modal-title" class="text-lg font-bold"></h3>
+        <button id="modal-close" class="p-2 rounded-lg hover:bg-[var(--tg-theme-secondary-bg-color)]" aria-label="بستن">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="modal-content" class="space-y-3"></div>
+      <div id="modal-actions" class="mt-5 flex gap-2"></div>
+    </div>
+  </div>
+
+  <!-- Lightbox for images -->
+  <div id="lightbox" class="fixed inset-0 hidden z-[90] bg-black/80 items-center justify-center">
+    <img id="lightbox-img" class="lightbox-img" alt="" />
+  </div>
+
+  <!-- PAGES -->
+  <div id="main-menu-page" class="hidden flex-grow flex flex-col p-6 anim-fade-in">
+    <a href="#content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:right-2 bg-black/70 text-white px-3 py-1 rounded">پرش به محتوا</a>
+    <header id="user-profile" class="text-center mb-8 section-bg p-6 anim-scale-in">
+      <img id="profile-pic" src="" alt="" class="w-20 h-20 rounded-full mx-auto mb-3 border-2" style="border-color: var(--tg-theme-hint-color);" />
+      <h2 id="user-fullname" class="text-2xl font-bold">کاربر</h2>
+      <p id="user-username" class="text-sm" style="color: var(--tg-theme-hint-color);"></p>
+      <p id="user-id" class="text-xs mt-1" style="color: var(--tg-theme-subtitle-text-color);">ID:</p>
+    </header>
+
+    <main id="content" class="grid grid-cols-1 gap-4 flex-grow">
+      <button onclick="navigateToNewTicket()" class="btn w-full text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center" style="background-color: var(--tg-theme-button-color);">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        ثبت تیکت جدید
+      </button>
+      <button onclick="navigateToTicketsList()" class="btn w-full text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center" style="background-color: var(--tg-theme-button-color);">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+        مشاهده تیکت‌ها
+      </button>
+
+      <div id="admin-actions" class="hidden grid grid-cols-1 gap-4">
+        <button onclick="navigateToAdminDashboard()" class="btn w-full bg-rose-500 text-white font-bold py-4 px-4 rounded-2xl flex items-center justify-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2a4 4 0 00-4-4H3a2 2 0 00-2 2v2a2 2 0 002 2h2a4 4 0 004-4zm0 0v-2a4 4 0 014-4h2a4 4 0 014 4v2a4 4 0 01-4 4h-2a4 4 0 01-4-4zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v.5" /></svg>
+          ورود به پنل مدیریت
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <div id="dashboard-page" class="hidden flex-grow flex flex-col p-4 anim-fade-in">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-2xl font-bold">داشبورد</h2>
+      <button onclick="showPage('main-menu-page')" class="text-sm p-2 rounded-lg" style="color: var(--tg-theme-link-color);">بازگشت</button>
+    </div>
+    <div id="stats-container" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <button onclick="navigateToAdminPanel(1)" class="btn w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-xl">مشاهده تیکت‌ها</button>
+      <button id="user-management-btn" onclick="navigateToUserManagement(1)" class="btn w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-xl">مدیریت کاربران</button>
+    </div>
+  </div>
+
+  <div id="admin-panel-page" class="hidden flex-grow flex flex-col anim-fade-in">
+    <div class="p-4 border-b sticky top-0 z-10 section-bg">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-bold">همه تیکت‌ها</h2>
+        <button onclick="showPage('dashboard-page')" class="text-sm p-2 rounded-lg" style="color: var(--tg-theme-link-color);">داشبورد</button>
+      </div>
+      <form id="admin-filter-form" class="grid grid-cols-1 md:grid-cols-4 gap-2" onsubmit="event.preventDefault()">
+        <input type="text" name="search" id="admin-search" placeholder="جستجو… /" class="p-2 border rounded-lg col-span-2" />
+        <select name="status" class="p-2 border rounded-lg">
+          <option value="">همه وضعیت‌ها</option>
+          <option value="open">باز</option>
+          <option value="answered">پاسخ داده شده</option>
+          <option value="closed">بسته شده</option>
+        </select>
+        <select name="department" class="p-2 border rounded-lg">
+          <option value="">همه دپارتمان‌ها</option>
+          <option value="technical">فنی</option>
+          <option value="sales">فروش</option>
+          <option value="billing">مالی</option>
+          <option value="other">سایر</option>
+        </select>
+      </form>
+    </div>
+    <div id="admin-tickets-list-container" class="flex-grow overflow-y-auto p-2 no-scrollbar"></div>
+    <div id="admin-pagination-container" class="p-2 border-t flex justify-center items-center gap-2" style="border-color: var(--tg-theme-hint-color);"></div>
+  </div>
+
+  <div id="admin-users-page" class="hidden flex-grow flex flex-col anim-fade-in">
+    <div class="p-4 border-b sticky top-0 z-10 section-bg">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-bold">مدیریت کاربران</h2>
+        <button onclick="showPage('dashboard-page')" class="text-sm p-2 rounded-lg" style="color: var(--tg-theme-link-color);">داشبورد</button>
+      </div>
+      <form id="admin-user-filter-form" class="grid grid-cols-1 gap-2" onsubmit="event.preventDefault()">
+        <input type="text" id="user-search" name="search" placeholder="جستجوی کاربر… /" class="p-2 border rounded-lg w-full" />
+      </form>
+    </div>
+    <div id="admin-users-list-container" class="flex-grow overflow-y-auto p-2 no-scrollbar"></div>
+    <div id="admin-user-pagination-container" class="p-2 border-t flex justify-center items-center gap-2" style="border-color: var(--tg-theme-hint-color);"></div>
+  </div>
+
+  <div id="new-ticket-page" class="hidden flex-grow flex flex-col p-4 anim-fade-in">
+    <div class="flex items-center mb-4">
+      <button onclick="showPage('main-menu-page')" class="p-2 rounded-full hover:bg-gray-200/50">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <h2 class="text-xl font-bold mr-2">ثبت تیکت جدید</h2>
+    </div>
+    <form id="new-ticket-form" class="space-y-4 flex-grow flex flex-col">
+      <div>
+        <label for="title" class="block text-sm font-medium mb-1">عنوان تیکت</label>
+        <input type="text" id="title" name="title" required class="w-full p-3 border rounded-lg" />
+      </div>
+      <div>
+        <label for="department" class="block text-sm font-medium mb-1">دپارتمان</label>
+        <select id="department" name="department" required class="w-full p-3 border rounded-lg">
+          <option value="technical">پشتیبانی فنی</option>
+          <option value="sales">بخش فروش</option>
+          <option value="billing">امور مالی</option>
+          <option value="other">سایر موارد</option>
+        </select>
+      </div>
+      <div>
+        <label for="message" class="block text-sm font-medium mb-1">متن پیام</label>
+        <textarea id="message" name="message" rows="6" required class="w-full p-3 border rounded-lg" placeholder="شرح مشکل، گام‌هایی که رفتید و انتظار شما…"></textarea>
+      </div>
+
+      <div id="new-ticket-attachment-preview" class="text-sm p-2 hidden rounded-lg items-center justify-between" style="background: var(--tg-theme-secondary-bg-color);"></div>
+
+      <div class="flex gap-2">
+        <label for="new-ticket-attachment-input" class="cursor-pointer flex-1 flex items-center justify-center p-2 rounded-lg text-sm" style="color: var(--tg-theme-link-color); background: var(--tg-theme-secondary-bg-color);">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a3 3 0 006 0V7a1 1 0 112 0v4a5 5 0 01-10 0V7a5 5 0 0110 0v4a1 1 0 11-2 0V7a3 3 0 00-3-3z" clip-rule="evenodd"/></svg>
+          پیوست فایل
+        </label>
+        <input type="file" id="new-ticket-attachment-input" class="hidden" accept="image/jpeg,image/png,image/gif,image/webp" />
+
+        <button type="button" id="location-btn" class="flex-1 flex items-center justify-center p-2 rounded-lg text-sm" style="color: var(--tg-theme-link-color); background: var(--tg-theme-secondary-bg-color);">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/></svg>
+          موقعیت
+        </button>
+      </div>
+
+      <div class="flex-grow"></div>
+      <button type="submit" class="btn w-full text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center" style="background: var(--tg-theme-button-color);">
+        <span class="btn-text">ارسال تیکت</span>
+        <div class="loader btn-loader hidden" style="width: 22px; height: 22px; border-width: 2px;"></div>
+      </button>
+    </form>
+  </div>
+
+  <div id="tickets-list-page" class="hidden flex-grow flex flex-col anim-fade-in">
+    <div class="flex items-center p-4 border-b sticky top-0 z-10 section-bg">
+      <button onclick="showPage('main-menu-page')" class="p-2 rounded-full hover:bg-gray-200/50">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <h2 class="text-xl font-bold mr-2">لیست تیکت‌های شما</h2>
+    </div>
+    <div id="tickets-list-container" class="flex-grow overflow-y-auto p-2 no-scrollbar"></div>
+  </div>
+
+  <div id="ticket-chat-page" class="hidden flex-grow flex flex-col">
+    <div class="p-4 border-b sticky top-0 z-10 flex items-center section-bg">
+      <button onclick="navigateBackFromChat()" class="p-2 rounded-full hover:bg-gray-200/50" aria-label="بازگشت">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <div class="mr-2 flex-grow">
+        <h2 id="chat-ticket-title" class="font-bold truncate"></h2>
+        <p id="chat-ticket-meta" class="text-xs truncate" style="color: var(--tg-theme-subtitle-text-color);"></p>
+      </div>
+    </div>
+
+    <div id="chat-messages-container" class="flex-grow overflow-y-auto p-4 no-scrollbar space-y-3 bg-transparent"></div>
+
+    <div id="chat-loading-indicator" class="hidden fixed bottom-[76px] right-3 z-10"><div class="dot-flashing"></div></div>
+
+    <div id="chat-reply-container" class="p-3 border-t section-bg">
+      <div id="reopen-button-container" class="hidden mb-2">
+        <button onclick="handleReopenTicket(currentTicketId)" class="w-full py-2 px-4 rounded-lg text-white font-medium" style="background: var(--tg-theme-button-color);">بازگشایی تیکت</button>
+      </div>
+
+      <form id="reply-form" class="flex items-center gap-2">
+        <input type="text" id="reply-message" placeholder="پیام خود را بنویسید… (Ctrl/⌘+Enter برای ارسال)" class="flex-grow p-3 border rounded-lg" />
+        <label for="reply-attachment-input" class="cursor-pointer p-3 rounded-lg hover:bg-[var(--tg-theme-secondary-bg-color)]" title="پیوست">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a3 3 0 006 0V7a1 1 0 112 0v4a5 5 0 01-10 0V7a5 5 0 0110 0v4a1 1 0 11-2 0V7a3 3 0 00-3-3z" clip-rule="evenodd"/></svg>
+        </label>
+        <input type="file" id="reply-attachment-input" class="hidden" accept="image/jpeg,image/png,image/gif,image/webp" />
+        <button type="submit" class="btn p-3 rounded-lg text-white" style="background: var(--tg-theme-button-color);" title="ارسال">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+        </button>
+      </form>
+
+      <div id="reply-attachment-preview" class="text-sm p-2 hidden rounded-lg mt-2 items-center justify-between" style="background: var(--tg-theme-secondary-bg-color);"></div>
+
+      <div id="admin-reply-actions" class="hidden items-center mt-2">
+        <input type="checkbox" id="close-ticket-checkbox" class="ml-2" />
+        <label for="close-ticket-checkbox">بستن تیکت پس از ارسال این پاسخ</label>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =====================
+       App State & Constants
+       ===================== */
+    const tg = window.Telegram?.WebApp || {};
+    const API_URL = 'api.php';
+    let userRole = 'user';
+    let currentTicketId = null;
+    let currentAdminPage = 1;
+    let currentUserPage = 1;
+    let currentUserId = null;
+    let userData = null;
+
+    /* =====================
+       Helpers (UX, Theme, A11y)
+       ===================== */
+    function applyTheme() {
+      const isDark = tg?.colorScheme === 'dark';
+      const s = isDark ? 'dark' : 'light';
+      const set = (k) => document.documentElement.style.setProperty(`--${k}`, getComputedStyle(document.documentElement).getPropertyValue(`--${k}-${s}`));
+      ['tg-theme-bg-color','tg-theme-text-color','tg-theme-hint-color','tg-theme-link-color','tg-theme-button-color','tg-theme-button-text-color','tg-theme-secondary-bg-color','tg-theme-header-bg-color','tg-theme-section-bg-color','tg-theme-subtitle-text-color','tg-theme-destructive-text-color'].forEach(set);
+      document.body.style.background = `var(--tg-theme-bg-color-${s})`;
+      document.body.style.color = `var(--tg-theme-text-color-${s})`;
+    }
+
+    function escapeHTML(str='') { return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#039;'}[c])); }
+
+    function el(tag, attrs={}, children=[]) {
+      const n = document.createElement(tag);
+      Object.entries(attrs).forEach(([k,v]) => {
+        if (k === 'class') n.className = v; else if (k === 'style') n.setAttribute('style', v); else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.substring(2), v); else if (v !== undefined && v !== null) n.setAttribute(k, v);
+      });
+      (Array.isArray(children)?children:[children]).filter(Boolean).forEach(c => n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+      return n;
+    }
+
+    function toast({title='', message='', type='info', duration=2600}={}) {
+      const colors = { info:'bg-blue-600', success:'bg-emerald-600', warn:'bg-amber-600', error:'bg-rose-600' };
+      const card = el('div', { class:`anim-slide-up section-bg px-4 py-3 rounded-xl border text-sm shadow ${colors[type]??colors.info} text-white` }, [
+        el('div', {class:'font-bold mb-0.5'}, title),
+        message && el('div', {}, message)
+      ]);
+      const wrap = document.getElementById('toast-container');
+      wrap.appendChild(card);
+      setTimeout(() => { card.classList.add('opacity-0','translate-y-1'); card.addEventListener('transitionend', () => card.remove(), {once:true}); }, duration);
+    }
+
+    function showModal({title='', content=null, actions=[]}={}) {
+      const overlay = document.getElementById('modal-overlay');
+      const modalTitle = document.getElementById('modal-title');
+      const modalContent = document.getElementById('modal-content');
+      const modalActions = document.getElementById('modal-actions');
+      modalTitle.textContent = title;
+      modalContent.innerHTML = '';
+      if (content) modalContent.appendChild(content);
+      modalActions.innerHTML = '';
+      actions.forEach(({label, variant='primary', onClick}) => {
+        const cls = variant==='danger'?'bg-rose-600 text-white':'bg-[var(--tg-theme-button-color)] text-[var(--tg-theme-button-text-color)]';
+        modalActions.appendChild(el('button',{class:`btn px-4 py-2 rounded-lg ${cls}`},label));
+        modalActions.lastChild.addEventListener('click', () => { onClick?.(); });
+      });
+      overlay.classList.remove('hidden');
+      // Focus trap
+      setTimeout(() => document.getElementById('modal-close').focus(), 0);
+    }
+
+    function hideModal(){ document.getElementById('modal-overlay').classList.add('hidden'); }
+
+    function showLoadingSpinner(){ document.getElementById('loading-spinner').classList.remove('hidden'); }
+    function hideLoadingSpinner(){ document.getElementById('loading-spinner').classList.add('hidden'); }
+
+    function showLoading(containerSelector){ const c = document.querySelector(containerSelector); if(!c) return; c.innerHTML = `<div class="p-3"><div class="h-16 rounded-xl skeleton"></div><div class="h-16 rounded-xl skeleton mt-2"></div><div class="h-16 rounded-xl skeleton mt-2"></div></div>`; }
+    function showError(containerSelector, msg='خطا در بارگذاری'){ const c=document.querySelector(containerSelector); if(c) c.innerHTML = `<div class="text-center p-4 text-rose-500">${escapeHTML(msg)}</div>`; }
+
+    function setOnlineStatus(){ document.getElementById('offline-banner').classList.toggle('hidden', navigator.onLine); }
+
+    /* =====================
+       API Wrapper (single-file)
+       ===================== */
+    async function apiCall(url, formData) {
+      try {
+        showLoadingSpinner();
+        if (tg?.initData) formData.append('initData', tg.initData);
+        const res = await fetch(url, { method:'POST', body: formData });
+        if (!res.ok) {
+          let errMsg = 'خطای ناشناخته در سرور';
+          try { const j = await res.json(); errMsg = j?.message || errMsg; } catch {}
+          throw new Error(errMsg + ` (HTTP ${res.status})`);
+        }
+        return await res.json();
+      } catch (e) {
+        console.error('API error:', e);
+        toast({ title:'ای وای!', message: e.message, type:'error' });
+        tg?.showAlert?.(e.message);
+        throw e;
+      } finally { hideLoadingSpinner(); }
+    }
+
+    /* =====================
+       App Bootstrap
+       ===================== */
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!tg?.initDataUnsafe || !tg?.initDataUnsafe.user) {
+        document.body.innerHTML = '<div class="h-screen flex items-center justify-center text-center p-4"><div class="space-y-2"><h1 class="text-2xl font-bold">خطا</h1><p>این برنامه فقط از طریق تلگرام قابل دسترسی است.</p></div></div>';
+        return;
+      }
+      try { tg.ready?.(); tg.expand?.(); } catch {}
+      applyTheme();
+      tg?.onEvent?.('themeChanged', applyTheme);
+
+      setOnlineStatus(); window.addEventListener('online', setOnlineStatus); window.addEventListener('offline', setOnlineStatus);
+
+      initialize();
+      setupEventListeners();
+    });
+
+    function setupEventListeners(){
+      document.getElementById('new-ticket-form').addEventListener('submit', handleNewTicket);
+      document.getElementById('reply-form').addEventListener('submit', handleReply);
+      document.getElementById('new-ticket-attachment-input').addEventListener('change', (e)=>handleFileSelect(e,'new-ticket-attachment-preview'));
+      document.getElementById('reply-attachment-input').addEventListener('change', (e)=>handleFileSelect(e,'reply-attachment-preview'));
+      document.getElementById('location-btn').addEventListener('click', getLocation);
+
+      // Modal controls
+      document.getElementById('modal-close').addEventListener('click', hideModal);
+      document.getElementById('modal-overlay').addEventListener('click', (e)=>{ if(e.target.id==='modal-overlay') hideModal(); });
+
+      // Lightbox
+      document.getElementById('lightbox').addEventListener('click', ()=>{ document.getElementById('lightbox').classList.add('hidden'); });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e)=>{
+        if (e.key === '/' && (document.getElementById('admin-panel-page')?.classList.contains('hidden')===false)) { e.preventDefault(); document.getElementById('admin-search').focus(); }
+        if (e.key === '/' && (document.getElementById('admin-users-page')?.classList.contains('hidden')===false)) { e.preventDefault(); document.getElementById('user-search').focus(); }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { const f=document.getElementById('reply-form'); if(!f.classList.contains('hidden')) f.requestSubmit(); }
+        if (e.key === 'Escape') { hideModal(); document.getElementById('lightbox').classList.add('hidden'); }
+      });
+
+      // Debounced search for admin lists
+      const debounce = (fn,ms=300)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }};
+      document.getElementById('admin-search').addEventListener('input', debounce(()=>navigateToAdminPanel(1), 350));
+      document.getElementById('admin-filter-form').addEventListener('change', ()=>navigateToAdminPanel(1));
+      document.getElementById('user-search').addEventListener('input', debounce(()=>navigateToUserManagement(1), 350));
+
+      // Draft persistence for New Ticket
+      ['title','department','message'].forEach(id=>{
+        const elx = document.getElementById(id);
+        elx.addEventListener('input', ()=>{ try{ localStorage.setItem('draft_'+id, elx.value); }catch{} });
+      });
+    }
+
+    async function initialize(){
+      try{
+        const res = await apiCall(`${API_URL}?action=initialize`, new FormData());
+        if(res.status==='success'){
+          userRole = res.data.role; userData = res.data.user; currentUserId = userData.id;
+          displayUserProfile(userData);
+          setupUIForRole();
+          showPage('main-menu-page');
+        }
+      }catch{}
+    }
+
+    function setupUIForRole(){
+      const adminActions = document.getElementById('admin-actions');
+      const userMgmtBtn = document.getElementById('user-management-btn');
+      if (userRole==='admin' || userRole==='super_admin'){
+        adminActions.classList.remove('hidden');
+        userMgmtBtn.style.display = (userRole==='super_admin') ? 'block' : 'none';
+      } else {
+        adminActions.classList.add('hidden');
+      }
+    }
+
+    function displayUserProfile(user){
+      const profilePic = document.getElementById('profile-pic');
+      const fullNameEl = document.getElementById('user-fullname');
+      const usernameEl = document.getElementById('user-username');
+      const idEl = document.getElementById('user-id');
+      const fullName = `${user.first_name||''} ${user.last_name||''}`.trim();
+      fullNameEl.textContent = fullName || 'کاربر';
+      usernameEl.textContent = user.username ? `@${user.username}` : '';
+      usernameEl.style.display = user.username ? 'block' : 'none';
+      idEl.textContent = `ID: ${user.id}`;
+      if (user.photo_url){
+        profilePic.src = user.photo_url; profilePic.alt = fullName || 'Profile';
+      } else {
+        const firstLetter = (fullName.charAt(0) || 'U').toUpperCase();
+        profilePic.src = `https://placehold.co/80x80/E2E8F0/4A5568?text=${encodeURIComponent(firstLetter)}`;
+        profilePic.alt = firstLetter;
+      }
+    }
+
+    function showPage(id){
+      document.querySelectorAll('[id$="-page"]').forEach(p=>p.classList.add('hidden'));
+      document.getElementById(id).classList.remove('hidden');
+      // Restore draft if new-ticket page
+      if (id==='new-ticket-page') {
+        ['title','department','message'].forEach(k=>{ const v=localStorage.getItem('draft_'+k); if(v!==null) document.getElementById(k).value=v; });
+      }
+    }
+
+    function navigateBackFromChat(){ (userRole==='admin'||userRole==='super_admin') ? navigateToAdminPanel(currentAdminPage) : navigateToTicketsList(); }
+
+    function navigateToDashboard(){ showPage('dashboard-page'); loadDashboardStats(); }
+
+    async function loadDashboardStats(){
+      showLoading('#stats-container');
+      try{
+        const res = await apiCall(`${API_URL}?action=get_dashboard_stats`, new FormData());
+        if(res.status==='success'){
+          const s = res.data;
+          document.getElementById('stats-container').innerHTML = `
+            <div class="p-4 rounded-xl text-center section-bg anim-scale-in"><p class="text-2xl font-bold">${s.open_tickets}</p><p class="text-sm" style="color: var(--tg-theme-subtitle-text-color);">تیکت‌های باز</p></div>
+            <div class="p-4 rounded-xl text-center section-bg anim-scale-in"><p class="text-2xl font-bold">${s.total_users}</p><p class="text-sm" style="color: var(--tg-theme-subtitle-text-color);">کاربران</p></div>
+            <div class="p-4 rounded-xl text-center section-bg anim-scale-in"><p class="text-2xl font-bold">${s.tickets_today}</p><p class="text-sm" style="color: var(--tg-theme-subtitle-text-color);">تیکت امروز</p></div>`;
+        }
+      }catch{ showError('#stats-container'); }
+    }
+
+    function navigateToAdminDashboard(){ navigateToDashboard(); }
+
+    async function navigateToAdminPanel(page=1){
+      showPage('admin-panel-page'); currentAdminPage = page;
+      showLoading('#admin-tickets-list-container');
+      try{
+        const form = document.getElementById('admin-filter-form');
+        const fd = new FormData(form); fd.append('page', page);
+        const res = await apiCall(`${API_URL}?action=get_all_tickets`, fd);
+        if(res.status==='success'){
+          const c = document.getElementById('admin-tickets-list-container'); c.innerHTML='';
+          if(res.data.tickets.length===0){ c.innerHTML = '<p class="text-center p-4" style="color: var(--tg-theme-hint-color);">تیکتی یافت نشد.</p>'; }
+          else res.data.tickets.forEach(t => c.appendChild(createTicketElement(t,'admin')));
+          renderPagination('admin-pagination-container', res.data.total_pages, res.data.current_page, navigateToAdminPanel);
+        }
+      }catch{ showError('#admin-tickets-list-container'); }
+    }
+
+    async function navigateToUserManagement(page=1){
+      showPage('admin-users-page'); currentUserPage = page;
+      showLoading('#admin-users-list-container');
+      try{
+        const form = document.getElementById('admin-user-filter-form');
+        const fd = new FormData(form); fd.append('page', page);
+        const res = await apiCall(`${API_URL}?action=get_users`, fd);
+        if(res.status==='success'){
+          const c = document.getElementById('admin-users-list-container'); c.innerHTML='';
+          if(res.data.users.length===0){ c.innerHTML = '<p class="text-center p-4" style="color: var(--tg-theme-hint-color);">کاربری یافت نشد.</p>'; }
+          else res.data.users.forEach(u => c.appendChild(createUserElement(u)));
+          renderPagination('admin-user-pagination-container', res.data.total_pages, res.data.current_page, navigateToUserManagement);
+        }
+      }catch{ showError('#admin-users-list-container'); }
+    }
+
+    function renderPagination(containerId, total, current, cb){
+      const c = document.getElementById(containerId); c.innerHTML='';
+      if (total<=1) return;
+      const mkBtn=(p,txt=p)=>{ const b=el('button',{class:`px-3 py-1 rounded pagination-button ${p===current?'active':''}`}, txt); b.onclick=()=>cb(p); return b; };
+      if(current>1) c.appendChild(mkBtn(current-1,'قبلی'));
+      for(let i=Math.max(1,current-2); i<=Math.min(total,current+2); i++) c.appendChild(mkBtn(i));
+      if(current<total) c.appendChild(mkBtn(current+1,'بعدی'));
+    }
+
+    function navigateToNewTicket(){ showPage('new-ticket-page'); document.getElementById('new-ticket-form').reset(); document.getElementById('new-ticket-attachment-preview').classList.add('hidden'); document.getElementById('new-ticket-attachment-preview').innerHTML=''; }
+
+    function navigateToTicketsList(){ showPage('tickets-list-page'); loadUserTickets(); }
+
+    async function loadUserTickets(){
+      showLoading('#tickets-list-container');
+      try{
+        const res = await apiCall(`${API_URL}?action=get_tickets`, new FormData());
+        const c = document.getElementById('tickets-list-container'); c.innerHTML='';
+        if(res.status==='success'){
+          if(res.data.length===0) c.innerHTML = '<p class="text-center p-4" style="color: var(--tg-theme-hint-color);">شما هیچ تیکتی ندارید.</p>';
+          else res.data.forEach(t => c.appendChild(createTicketElement(t,'user')));
+        }
+      }catch{ showError('#tickets-list-container'); }
+    }
+
+    function createTicketElement(ticket, view){
+      const statusCls={open:'status-open', answered:'status-answered', closed:'status-closed'};
+      const statusTxt={open:'باز', answered:'پاسخ داده شده', closed:'بسته شده'};
+      const deptTxt={technical:'فنی', sales:'فروش', billing:'مالی', other:'سایر'};
+      const item = el('div', {class:'ticket-item cursor-pointer p-4 border-b flex justify-between items-center hover:bg-[var(--tg-theme-secondary-bg-color)] anim-fade-in', style:'border-color: var(--tg-theme-hint-color);', role:'button', tabindex:'0'});
+      item.addEventListener('click', ()=>showTicketChat(ticket.id));
+      item.addEventListener('keydown', (e)=>{ if(e.key==='Enter') showTicketChat(ticket.id); });
+
+      let adminControls='';
+      if (view==='admin' && (userRole==='admin' || userRole==='super_admin')){
+        const label = ticket.is_banned ? 'رفع مسدودیت' : 'مسدود کردن کاربر';
+        const color = ticket.is_banned ? 'bg-emerald-600' : 'bg-rose-600';
+        adminControls = `<button class="text-xs text-white px-2 py-1 rounded ${color}" data-user="${ticket.user_id}" data-banned="${ticket.is_banned}">${label}</button>`;
+      }
+
+      item.innerHTML = `
+        <div>
+          <div class="font-medium truncate max-w-[200px]">${escapeHTML(ticket.title)}</div>
+          <div class="text-xs mt-1" style="color: var(--tg-theme-subtitle-text-color);">${escapeHTML(deptTxt[ticket.department]||ticket.department)} • ${new Date(ticket.updated_at).toLocaleDateString('fa-IR')}</div>
+        </div>
+        <div class="flex flex-col items-end gap-2">
+          <span class="status-badge ${statusCls[ticket.status]}">${statusTxt[ticket.status]}</span>
+          ${adminControls}
+        </div>`;
+
+      if (view==='admin' && (userRole==='admin' || userRole==='super_admin')) {
+        const b = item.querySelector('button');
+        if (b) b.addEventListener('click', (e)=>{ e.stopPropagation(); toggleBanUser(+b.dataset.user, +b.dataset.banned); });
+      }
+
+      return item;
+    }
+
+    function createUserElement(user){
+      const roleTxt = { user:'کاربر', admin:'ادمین', super_admin:'سوپر ادمین' };
+      const isUser = user.role==='user';
+      const roleLabel = isUser ? 'ادمین کردن' : 'کاربر کردن';
+      const roleClass = isUser ? 'bg-blue-600' : 'bg-gray-600';
+      const wrap = el('div', {class:'user-item p-4 border-b flex justify-between items-center hover:bg-[var(--tg-theme-secondary-bg-color)]', style:'border-color: var(--tg-theme-hint-color);'});
+      wrap.innerHTML = `
+        <div>
+          <div class="font-medium">${escapeHTML(user.user_name || user.username || 'نامشخص')}</div>
+          <div class="text-xs mt-1" style="color: var(--tg-theme-subtitle-text-color);">ID: ${user.user_id}</div>
+        </div>
+        <div class="flex flex-col items-end gap-2">
+          <span class="text-xs px-2 py-1 rounded" style="background: var(--tg-theme-secondary-bg-color);">${roleTxt[user.role]}</span>
+          ${user.is_banned==1?'<span class="text-xs px-2 py-1 rounded bg-rose-600 text-white">مسدود</span>':''}
+          <div class="flex gap-2">
+            <button class="px-2 py-1 rounded text-xs" style="background: var(--tg-theme-secondary-bg-color);" data-dm="${user.user_id}">پیام</button>
+            ${(user.user_id!=currentUserId && user.role!=='super_admin')?`<button class="px-2 py-1 rounded text-xs text-white ${roleClass}" data-role="${user.user_id}" data-current="${user.role}">${roleLabel}</button>`:''}
+          </div>
+        </div>`;
+      const dmBtn = wrap.querySelector('[data-dm]');
+      dmBtn.addEventListener('click', ()=> openDmModal(user.user_id));
+      const roleBtn = wrap.querySelector('[data-role]');
+      if (roleBtn) roleBtn.addEventListener('click', ()=> toggleUserRole(user.user_id, user.role));
+      return wrap;
+    }
+
+    async function showTicketChat(id){
+      currentTicketId = id; showPage('ticket-chat-page');
+      const c = document.getElementById('chat-messages-container');
+      const titleEl = document.getElementById('chat-ticket-title');
+      const metaEl = document.getElementById('chat-ticket-meta');
+      const adminActs = document.getElementById('admin-reply-actions');
+      const reopen = document.getElementById('reopen-button-container');
+
+      showLoading('#chat-messages-container');
+      try{
+        const res = await apiCall(`${API_URL}?action=get_ticket_details&ticket_id=${id}`, new FormData());
+        if(res.status==='success'){
+          const t = res.data.ticket; const msgs = res.data.messages; const other = res.data.other_tickets||[];
+          titleEl.textContent = t.title;
+          metaEl.textContent = `${t.department} • ${new Date(t.created_at).toLocaleString('fa-IR')}`;
+          c.innerHTML='';
+
+          if (other.length>0 && (userRole==='admin'||userRole==='super_admin')){
+            const statusTxt={open:'باز', answered:'پاسخ داده شده', closed:'بسته شده'};
+            const box = el('div', {class:'mb-3 p-2 rounded-lg text-sm section-bg anim-scale-in'});
+            box.innerHTML = '<strong>سایر تیکت‌های این کاربر:</strong> ' + other.map(o=>`<a href="#" class="text-blue-500 underline" data-open="${o.id}">${escapeHTML(o.title)} (${statusTxt[o.status]})</a>`).join(', ');
+            c.appendChild(box);
+            box.querySelectorAll('[data-open]').forEach(a=>a.addEventListener('click',(e)=>{ e.preventDefault(); showTicketChat(+a.dataset.open); }));
+          }
+
+          msgs.forEach(m => c.appendChild(createMessageElement(m)));
+
+          if (t.status==='closed') { reopen.classList.remove('hidden'); document.getElementById('chat-reply-container').classList.add('hidden'); }
+          else { reopen.classList.add('hidden'); document.getElementById('chat-reply-container').classList.remove('hidden'); (userRole==='admin'||userRole==='super_admin')?adminActs.classList.remove('hidden'):adminActs.classList.add('hidden'); }
+          c.scrollTop = c.scrollHeight;
+        }
+      }catch{ showError('#chat-messages-container'); }
+    }
+
+    function createMessageElement(msg){
+      const isSelf = msg.sender_id == currentUserId;
+      const wrap = el('div', {class:'flex flex-col anim-fade-in'});
+      const alignment = isSelf ? 'justify-end' : 'justify-start';
+      const bubbleCls = isSelf ? 'message-user' : 'message-admin';
+
+      // Safe text with newlines
+      const safeMsg = escapeHTML(msg.message||'').replace(/\n/g,'<br>');
+
+      let attach = '';
+      if (msg.file_path){
+        const ext = (msg.file_path.split('.').pop()||'').toLowerCase();
+        if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
+          attach = `<div class="mt-2"><img src="${msg.file_path}" alt="ضمیمه" class="max-w-full h-auto rounded-lg cursor-zoom-in" data-lightbox="${msg.file_path}"></div>`;
+        } else {
+          attach = `<div class="mt-2 text-sm"><a href="${msg.file_path}" target="_blank" class="text-blue-500 underline">دانلود فایل: ${escapeHTML(msg.original_name||'file')}</a></div>`;
+        }
+      }
+
+      wrap.innerHTML = `
+        <div class="flex ${alignment}">
+          <div class="max-w-xs md:max-w-md p-3 ${bubbleCls}">
+            <p class="text-sm whitespace-pre-wrap">${safeMsg}</p>
+            ${attach}
+          </div>
+        </div>
+        <p class="text-xs mt-1 self-${isSelf?'end':'start'} message-time">${new Date(msg.created_at).toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit'})}</p>`;
+
+      // Lightbox handler
+      const img = wrap.querySelector('[data-lightbox]');
+      if (img) img.addEventListener('click', ()=>openLightbox(img.dataset.lightbox));
+      return wrap;
+    }
+
+    function openLightbox(src){ const lb=document.getElementById('lightbox'); const im=document.getElementById('lightbox-img'); im.src=src; lb.classList.remove('hidden'); }
+
+    async function handleReopenTicket(id){
+      confirmDialog('بازگشایی تیکت','آیا از بازگشایی این تیکت مطمئن هستید؟', async ()=>{
+        try{ const fd=new FormData(); fd.append('ticket_id', id); await apiCall(`${API_URL}?action=reopen_ticket`, fd); await showTicketChat(id); toast({title:'تیکت باز شد', type:'success'}); }catch{}
+      });
+    }
+
+    function handleFileSelect(event, previewId){
+      const file = event.target.files?.[0];
+      const box = document.getElementById(previewId);
+      if(!file){ box.classList.add('hidden'); box.innerHTML=''; return; }
+      const reader = new FileReader();
+      reader.onload = (e)=>{
+        box.innerHTML = `
+          <div class="flex items-center gap-2">
+            <img src="${e.target.result}" alt="پیش‌نمایش" class="h-10 w-10 object-cover rounded"/>
+            <span class="truncate flex-grow">${escapeHTML(file.name)}</span>
+            <button type="button" class="text-rose-600" data-remove="${previewId}" data-input="${event.target.id}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            </button>
+          </div>`;
+        box.classList.remove('hidden');
+        box.querySelector('[data-remove]')?.addEventListener('click', (btnEvt)=> removeAttachment(btnEvt.target.closest('button').dataset.input, previewId));
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeAttachment(inputId, previewId){ const input=document.getElementById(inputId); if(input) input.value=''; const e={target:{files:[]}}; handleFileSelect(e, previewId); }
+
+    async function handleNewTicket(e){
+      e.preventDefault(); const form = e.target; const btn=form.querySelector('button[type="submit"]'); const txt=btn.querySelector('.btn-text'); const ld=btn.querySelector('.btn-loader');
+      txt.classList.add('hidden'); ld.classList.remove('hidden'); btn.disabled = true;
+      try{
+        const fd = new FormData(form);
+        const fi = document.getElementById('new-ticket-attachment-input'); if (fi.files.length>0) fd.append('attachment', fi.files[0]);
+        await apiCall(`${API_URL}?action=create_ticket`, fd);
+        tg?.HapticFeedback?.notificationOccurred?.('success');
+        // clear drafts
+        ['title','department','message'].forEach(k=>{ try{ localStorage.removeItem('draft_'+k); }catch{} });
+        navigateToTicketsList(); toast({title:'تیکت شما ثبت شد', type:'success'});
+      }catch{} finally{ txt.classList.remove('hidden'); ld.classList.add('hidden'); btn.disabled=false; }
+    }
+
+    async function handleReply(e){
+      e.preventDefault();
+      const msgInput = document.getElementById('reply-message');
+      const txt = msgInput.value.trim();
+      const fi = document.getElementById('reply-attachment-input');
+      if (!txt && fi.files.length===0) return;
+      document.getElementById('chat-loading-indicator').classList.remove('hidden');
+      const sendBtn = e.target.querySelector('button[type="submit"]'); sendBtn.disabled = true;
+      try{
+        const fd = new FormData(); fd.append('ticket_id', currentTicketId); fd.append('message', txt);
+        if (fi.files.length>0) fd.append('attachment', fi.files[0]);
+        if (userRole==='admin' || userRole==='super_admin'){
+          const closeCb = document.getElementById('close-ticket-checkbox'); if (closeCb?.checked) fd.append('close_ticket','true');
+        }
+        const res = await apiCall(`${API_URL}?action=add_reply`, fd);
+        if(res.status==='success'){
+          tg?.HapticFeedback?.notificationOccurred?.('success');
+          msgInput.value=''; removeAttachment('reply-attachment-input','reply-attachment-preview');
+          if (userRole==='admin'||userRole==='super_admin') { const cb=document.getElementById('close-ticket-checkbox'); if(cb) cb.checked=false; }
+          if (res.data?.new_message) {
+            document.getElementById('chat-messages-container').appendChild(createMessageElement(res.data.new_message));
+            const m=document.getElementById('chat-messages-container'); m.scrollTop=m.scrollHeight;
+          } else { await showTicketChat(currentTicketId); }
+        }
+      }catch{} finally{ document.getElementById('chat-loading-indicator').classList.add('hidden'); sendBtn.disabled=false; }
+    }
+
+    function confirmDialog(title, text, onConfirm){
+      const content = el('div', {}, [ el('p', {class:'text-sm'}, text) ]);
+      showModal({ title, content, actions:[ {label:'انصراف', variant:'neutral', onClick: hideModal}, {label:'تایید', variant:'primary', onClick: ()=>{ hideModal(); onConfirm?.(); }} ] });
+    }
+
+    async function toggleBanUser(userId, isBanned){
+      confirmDialog(isBanned? 'رفع مسدودیت' : 'مسدود کردن کاربر', isBanned? 'آیا از رفع مسدودیت این کاربر مطمئن هستید؟' : 'آیا از مسدود کردن این کاربر مطمئن هستید؟', async ()=>{
+        try{
+          const fd=new FormData(); fd.append('user_id_to_toggle', userId);
+          const res = await apiCall(`${API_URL}?action=${isBanned?'unban_user':'ban_user'}`, fd);
+          if (res.status==='success'){
+            tg?.HapticFeedback?.notificationOccurred?.('success');
+            if (!document.getElementById('admin-panel-page').classList.contains('hidden')) navigateToAdminPanel(currentAdminPage);
+            else if (!document.getElementById('admin-users-page').classList.contains('hidden')) navigateToUserManagement(currentUserPage);
+            toast({title: isBanned?'کاربر آزاد شد':'کاربر مسدود شد', type:'success'});
+          }
+        }catch{}
+      });
+    }
+
+    function openDmModal(userId){
+      const textarea = el('textarea', {class:'w-full p-3 border rounded-lg', rows:'5', placeholder:'پیام خود را بنویسید…'});
+      showModal({
+        title:'ارسال پیام مستقیم',
+        content: textarea,
+        actions:[
+          {label:'انصراف', variant:'neutral', onClick: hideModal},
+          {label:'ارسال', variant:'primary', onClick: async ()=>{ const msg=textarea.value.trim(); if(!msg) return; await handleSendDirectMessage(userId, msg); hideModal(); }}
+        ]
+      });
+      textarea.focus();
+    }
+
+    async function handleSendDirectMessage(userId, message){
+      try{ const fd=new FormData(); fd.append('user_id', userId); fd.append('message', message); const res = await apiCall(`${API_URL}?action=send_direct_message`, fd); tg?.HapticFeedback?.notificationOccurred?.('success'); toast({title:'پیام ارسال شد', message: res.message||'', type:'success'}); }catch{}
+    }
+
+    async function toggleUserRole(userId, currentRole){
+      const to = currentRole==='user' ? 'admin' : 'user';
+      confirmDialog(to==='admin'?'ارتقای نقش به ادمین':'تبدیل به کاربر', `آیا از ${to==='admin'?'ادمین کردن':'کاربر کردن'} این کاربر مطمئن هستید؟`, async ()=>{
+        try{ const fd=new FormData(); fd.append('user_id', userId); fd.append('role', to); const res=await apiCall(`${API_URL}?action=set_user_role`, fd); if(res.status==='success'){ tg?.HapticFeedback?.notificationOccurred?.('success'); navigateToUserManagement(currentUserPage); toast({title:'نقش کاربر به‌روز شد', type:'success'});} }catch{}
+      });
+    }
+
+    function getLocation(){
+      if (!navigator.geolocation) { toast({title:'GPS پشتیبانی نمی‌شود', type:'warn'}); return; }
+      tg?.HapticFeedback?.impactOccurred?.('light');
+      navigator.geolocation.getCurrentPosition((pos)=>{
+        const {latitude:lat, longitude:lon} = pos.coords; const link=`https://maps.google.com/?q=${lat},${lon}`; const m=document.getElementById('message');
+        const cur=m.value; m.value = cur + (cur?'\n':'') + `موقعیت مکانی: ${link}`; toast({title:'موقعیت افزوده شد', type:'success'});
+      }, (err)=>{ console.error('geolocation error', err); toast({title:'دریافت موقعیت ناموفق بود', type:'error'}); }, { enableHighAccuracy:true, timeout: 10000, maximumAge: 300000 });
+    }
+  </script>
+  <script>
+// ---- Hotfix: ناوبری و کلیکِ مطمئن برای همه‌ی دکمه‌های بازگشت و ناوبری ----
+(function(){
+let __navLock = false;
+function safeNavigate(fn){ if(__navLock) return; __navLock=true; try{ fn&&fn(); } finally { setTimeout(()=>{__navLock=false;}, 180); } }
+window.safeNavigate = safeNavigate;
+
+
+function tagBackButtons(){
+try{
+document.querySelectorAll('button[onclick*="navigateBackFromChat"]').forEach(b=>b.setAttribute('data-action','back-chat'));
+document.querySelectorAll('button[onclick*="showPage(\'main-menu-page\')"]').forEach(b=>b.setAttribute('data-action','back-main'));
+document.querySelectorAll('button[onclick*="showPage(\'dashboard-page\')"]').forEach(b=>b.setAttribute('data-action','back-dashboard'));
+// fallback: اگر aria-label="بازگشت" داشت هم به عنوان back-chat درنظر بگیر
+document.querySelectorAll('button[aria-label="بازگشت"]').forEach(b=>{ if(!b.hasAttribute('data-action')) b.setAttribute('data-action','back-chat'); });
+}catch(e){ /* no-op */ }
+}
+
+
+function globalClickDelegation(){
+document.addEventListener('click', function(ev){
+const btn = ev.target.closest('[data-action]');
+if(!btn) return;
+const act = btn.getAttribute('data-action');
+switch(act){
+case 'back-main': ev.preventDefault(); safeNavigate(()=>window.showPage && window.showPage('main-menu-page')); break;
+case 'back-dashboard': ev.preventDefault(); safeNavigate(()=>window.showPage && window.showPage('dashboard-page')); break;
+case 'back-chat': ev.preventDefault(); safeNavigate(()=>window.navigateBackFromChat && window.navigateBackFromChat()); break;
+}
+}, true);
+}
+
+
+function installHistoryHook(){
+try{
+const _origShow = window.showPage;
+window.showPage = function(id){
+try{ history.pushState({id}, '', '#'+id); }catch{}
+if(typeof _origShow === 'function') _origShow(id); else {
+document.querySelectorAll('[id$="-page"]').forEach(p=>p.classList.add('hidden'));
+const el = document.getElementById(id); if(el) el.classList.remove('hidden');
+}
+if (id==='new-ticket-page'){
+try{ ['title','department','message'].forEach(k=>{ const v=localStorage.getItem('draft_'+k); if(v!==null){ const n=document.getElementById(k); if(n) n.value=v; } }); }catch{}
+}
+};
+
+
+window.addEventListener('popstate', (e)=>{
+const id = e.state?.id || (location.hash ? location.hash.slice(1) : 'main-menu-page');
+document.querySelectorAll('[id$="-page"]').forEach(p=>p.classList.add('hidden'));
+const target = document.getElementById(id) || document.getElementById('main-menu-page');
+if(target) target.classList.remove('hidden');
+});
+}catch(e){ /* no-op */ }
+}
+
+
+document.addEventListener('DOMContentLoaded', function(){
+tagBackButtons();
+globalClickDelegation();
+installHistoryHook();
+});
+})();
+</script>
+</body>
+</html>
