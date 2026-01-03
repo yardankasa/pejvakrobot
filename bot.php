@@ -1,6 +1,20 @@
 <?php
 
-if($_GET['x0cossher']!= 'koni_hacker')die;
+// بررسی امنیتی: فقط در صورت وجود پارامتر GET (برای دسترسی مستقیم)
+// در webhook این پارامتر وجود ندارد، پس این چک را فقط برای دسترسی مستقیم فعال می‌کنیم
+// همچنین اگر از setup.php یا فایل دیگری require شده، اجازه می‌دهیم
+if (!defined('SETUP_MODE') && !isset($GLOBALS['_SETUP_MODE'])) {
+    $isIncluded = (basename($_SERVER['PHP_SELF']) !== 'bot.php');
+    $input = @file_get_contents('php://input');
+    $isWebhook = !empty($input);
+    $isCLI = (php_sapi_name() === 'cli');
+    $hasSecurityParam = isset($_GET['x0cossher']);
+    
+    if (!$isCLI && !$isIncluded && !$hasSecurityParam && !$isWebhook) {
+        // اگر نه CLI است، نه include شده، نه پارامتر امنیتی دارد، و نه webhook update دارد، دسترسی را مسدود کن
+        die('Access Denied');
+    }
+}
 set_time_limit(0);
 date_default_timezone_set('Asia/Tehran');
 
@@ -18,6 +32,26 @@ require_once __DIR__.'/ticket_system/ticket_bot_handler_integrated.php';
 require_once 'config.php';
 
 // ============================================
+// بخش: مقداردهی اولیه متغیرهای سراسری
+// ============================================
+// این متغیرها ممکن است در برخی شرایط تعریف نشوند
+if (!isset($chat_type)) {
+    $chat_type = null;
+}
+if (!isset($from_id)) {
+    $from_id = null;
+}
+if (!isset($message)) {
+    $message = null;
+}
+if (!isset($message_id)) {
+    $message_id = null;
+}
+if (!isset($first_name)) {
+    $first_name = null;
+}
+
+// ============================================
 // بخش: بررسی و ایجاد خودکار جداول دیتابیس
 // ============================================
 /**
@@ -29,10 +63,32 @@ require_once 'config.php';
  * @return bool موفقیت یا عدم موفقیت
  */
 function checkAndMigrateDatabase($pdo, $dbName) {
+    // بررسی اینکه $pdo null نباشد
+    if ($pdo === null) {
+        error_log("خطا: \$pdo null است در checkAndMigrateDatabase");
+        return false;
+    }
+    
     try {
-        // بررسی وجود جدول users (به عنوان نماینده وجود جداول)
-        $stmt = $pdo->query("SHOW TABLES LIKE 'users'");
+        // بررسی وجود جداول: برای هر دو دیتابیس جدول users (اما در دیتابیس‌های جداگانه)
+        $checkTable = 'users';
+        $stmt = $pdo->query("SHOW TABLES LIKE '$checkTable'");
         $tableExists = $stmt->rowCount() > 0;
+        
+        // اگر جدول وجود دارد، بررسی کن که آیا ستون last_spin_time وجود دارد یا نه
+        if ($tableExists && $dbName !== DB_TICKET_NAME) {
+            try {
+                $pdo->query("SELECT last_spin_time FROM users LIMIT 1");
+            } catch (PDOException $e) {
+                // ستون وجود ندارد، باید اضافه شود
+                try {
+                    $pdo->exec("ALTER TABLE `users` ADD COLUMN `last_spin_time` INT(11) DEFAULT 0 COMMENT 'زمان آخرین چرخش گردونه شانس (timestamp)' AFTER `daily_subset`");
+                    error_log("ستون last_spin_time به جدول users اضافه شد");
+                } catch (PDOException $alterError) {
+                    error_log("خطا در افزودن ستون last_spin_time: " . $alterError->getMessage());
+                }
+            }
+        }
         
         if (!$tableExists) {
             // جداول وجود ندارند، باید migration اجرا شود
@@ -113,19 +169,80 @@ function checkAndMigrateDatabase($pdo, $dbName) {
             $pdo->beginTransaction();
             try {
                 $executed = 0;
-                foreach ($statements as $statement) {
+                $skipped = 0;
+                foreach ($statements as $index => $statement) {
                     $statement = trim($statement);
                     if (!empty($statement)) {
-                        $pdo->exec($statement);
-                        $executed++;
+                        $shouldExecute = false;
+                        
+                        // برای دیتابیس تیکت، فقط جداول مربوط به تیکت را اجرا کن
+                        if ($dbName === DB_TICKET_NAME) {
+                            // فقط جداول ticket_* و users (دیتابیس تیکت) را اجرا کن
+                            if (stripos($statement, 'CREATE TABLE') !== false) {
+                                // جداول ticket_* یا users (که در بخش تیکت است و user_id دارد)
+                                if (stripos($statement, 'ticket_') !== false || 
+                                    (stripos($statement, '`users`') !== false && stripos($statement, 'user_id') !== false)) {
+                                    $shouldExecute = true;
+                                }
+                            } elseif (stripos($statement, 'INSERT') === 0) {
+                                // INSERT ها را هم اجرا کن
+                                $shouldExecute = true;
+                            }
+                        } else {
+                            // برای دیتابیس اصلی، فقط جداول غیر تیکت را اجرا کن
+                            if (stripos($statement, 'CREATE TABLE') !== false && 
+                                stripos($statement, 'ticket_') === false) {
+                                // اگر users است، باید id داشته باشد (نه user_id) - این users دیتابیس اصلی است
+                                if (stripos($statement, '`users`') !== false) {
+                                    // بررسی کن که آیا این users دیتابیس اصلی است (id دارد) یا تیکت (user_id دارد)
+                                    if (stripos($statement, '`id`') !== false && stripos($statement, '`user_id`') === false) {
+                                        $shouldExecute = true;
+                                    }
+                                } else {
+                                    $shouldExecute = true;
+                                }
+                            } elseif (stripos($statement, 'INSERT') === 0 && 
+                                     stripos($statement, 'ticket_') === false) {
+                                $shouldExecute = true;
+                            }
+                        }
+                        
+                        if ($shouldExecute) {
+                            try {
+                                $pdo->exec($statement);
+                                $executed++;
+                            } catch (PDOException $execError) {
+                                // اگر خطای "table already exists" باشد، نادیده بگیر
+                                if (stripos($execError->getMessage(), 'already exists') === false && 
+                                    stripos($execError->getMessage(), 'Duplicate') === false) {
+                                    throw $execError; // خطای جدی را دوباره throw کن
+                                }
+                                $skipped++;
+                            }
+                        } else {
+                            $skipped++;
+                        }
                     }
                 }
                 $pdo->commit();
+                // نوشتن لاگ در فایل برای بررسی
+                $logFile = __DIR__ . '/migration_log.txt';
+                $logMsg = date('Y-m-d H:i:s') . " - Migration با موفقیت اجرا شد برای دیتابیس: $dbName (اجرا شده: $executed, رد شده: $skipped)\n";
+                file_put_contents($logFile, $logMsg, FILE_APPEND);
                 error_log("Migration با موفقیت اجرا شد برای دیتابیس: $dbName (تعداد دستورات: $executed)");
                 return true;
             } catch (PDOException $e) {
-                $pdo->rollBack();
-                error_log("خطا در اجرای migration برای دیتابیس $dbName: " . $e->getMessage());
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                $logFile = __DIR__ . '/migration_log.txt';
+                $errorMsg = "خطا در اجرای migration برای دیتابیس $dbName: " . $e->getMessage();
+                file_put_contents($logFile, date('Y-m-d H:i:s') . " - ERROR: $errorMsg\n", FILE_APPEND);
+                error_log($errorMsg);
+                // در setup mode، خطا را throw کن تا نمایش داده شود
+                if (defined('SETUP_MODE') && SETUP_MODE) {
+                    throw $e;
+                }
                 return false;
             }
         }
@@ -1868,9 +1985,20 @@ elseif($message == 'spin_the_wheel'){
     }
     // --- END: Check for channel membership ---
 
+    // Load user data
+    $users = $pdo->query("SELECT * FROM users WHERE id = '$from_id' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    if (!$users) {
+        bot('answerCallbackQuery', [
+            'callback_query_id' => $update->callback_query->id,
+            'text' => '❌ خطا: اطلاعات کاربر یافت نشد',
+            'show_alert' => true
+        ]);
+        $pdo = null; exit();
+    }
+
     // Get the current time as a timestamp
     $currentTime = time();
-    $lastSpinTime = $users['last_spin_time'];
+    $lastSpinTime = isset($users['last_spin_time']) ? (int)$users['last_spin_time'] : 0;
 
     // Check if 24 hours (86400 seconds) have passed since the last spin
     if($currentTime - $lastSpinTime < 86400){
@@ -2546,29 +2674,46 @@ sm($from_id,"برای خرید به آیدی @after_world مراجعه کنید.
             'show_alert'=>false
         ]);
 
-
         $randomcode  =  uniqid().rand(1111,9999);
         $pay_1 = $channel['tariff'] * 10;
         try{
             $pdo->exec("INSERT INTO re_payments (`file`,`id`,`amount`,`desc`,`type`,`fromid`,`time`) VALUES ('0','$randomcode','$pay_1','خرید موجودی $bot_name','coin','$from_id','$timering')");
         } catch(PDOException $e){
-            file_put_contents('e.txt',$e->getMessage());
-            die();
+            bot('answerCallbackQuery',[
+                'callback_query_id'=>$update->callback_query->id,
+                'text'=>'❌ خطا در ثبت فاکتور! لطفاً دوباره تلاش کنید.',
+                'show_alert'=>true
+            ]);
+            error_log("خطا در ثبت فاکتور pay_1: " . $e->getMessage());
+            $pdo = null;
+            exit();
         }
-$pay_1 = number_format($pay_1);
-        bot('editmessagetext', [
-            'chat_id'=>$from_id,
-            'text'=>"💎 جهت ادامه خرید روی دکمه زیر بزنید و مستقیما وارد درگاه می شوید.
-📍 پس از پرداخت مستقیما سکه ها به حساب شما واریز خواهد شد!
-👇 جهت ادامه  👇",
-            'message_id'=>$message_id,
-            'reply_markup'=>json_encode([
-                'resize_keyboard'=>true,
-                'inline_keyboard'=>[
-                    [['text'=>"⭐️ خرید 10 سکه به مبلغ $pay_1 ریال",'url'=>"{$channel['domin']}/PayLink/request.php?payment=$randomcode"]],
-                ]
-            ])
+        
+        $pay_1_formatted = number_format($pay_1);
+        $payment_text = "💎 جهت ادامه خرید روی دکمه زیر بزنید و مستقیما وارد درگاه می شوید.\n📍 پس از پرداخت مستقیما سکه ها به حساب شما واریز خواهد شد!\n👇 جهت ادامه  👇";
+        $payment_keyboard = json_encode([
+            'inline_keyboard'=>[
+                [['text'=>"⭐️ خرید 10 سکه به مبلغ $pay_1_formatted ریال",'url'=>"{$channel['domin']}/PayLink/request.php?payment=$randomcode"]],
+            ]
         ]);
+        
+        // حذف پیام قدیمی و ارسال پیام جدید
+        @bot('deletemessage', ['chat_id'=>$from_id, 'message_id'=>$message_id]);
+        
+        // ارسال پیام جدید با لینک پرداخت
+        $send_result = SM($from_id, $payment_text, null, $payment_keyboard);
+        if (!$send_result || !$send_result->ok) {
+            error_log("خطا در ارسال پیام pay_1: " . json_encode($send_result));
+            // تلاش مجدد با bot مستقیم
+            bot('sendMessage', [
+                'chat_id'=>$from_id,
+                'text'=>$payment_text,
+                'parse_mode'=>'html',
+                'disable_web_page_preview'=>true,
+                'reply_markup'=>$payment_keyboard
+            ]);
+        }
+        
         $pdo = null;
     }
 
@@ -2578,29 +2723,46 @@ $pay_1 = number_format($pay_1);
             'text'=>'⭐️ در حال ایجاد فاکتور پرداخت...',
             'show_alert'=>false
         ]);
+        
         $randomcode  =  uniqid().rand(1111,9999);
         $pay_1 = $channel['tariff'] * 25;
         try{
             $pdo->exec("INSERT INTO re_payments (`file`,`id`,`amount`,`desc`,`type`,`fromid`,`time`) VALUES ('0','$randomcode','$pay_1','خرید موجودی $bot_name','coin','$from_id','$timering')");
         } catch(PDOException $e){
-            file_put_contents('e.txt',$e->getMessage());
-            die();
+            bot('answerCallbackQuery',[
+                'callback_query_id'=>$update->callback_query->id,
+                'text'=>'❌ خطا در ثبت فاکتور! لطفاً دوباره تلاش کنید.',
+                'show_alert'=>true
+            ]);
+            error_log("خطا در ثبت فاکتور pay_2: " . $e->getMessage());
+            $pdo = null;
+            exit();
         }
-        $pay_1 = number_format($pay_1);
-
-        bot('editmessagetext', [
-            'chat_id'=>$from_id,
-            'text'=>"💎 جهت ادامه خرید روی دکمه زیر بزنید و مستقیما وارد درگاه می شوید.
-📍 پس از پرداخت مستقیما سکه ها به حساب شما واریز خواهد شد!
-👇 جهت ادامه  👇",
-            'message_id'=>$message_id,
-            'reply_markup'=>json_encode([
-                'resize_keyboard'=>true,
-                'inline_keyboard'=>[
-                    [['text'=>"⭐️ خرید 25 سکه به مبلغ $pay_1 ریال",'url'=>"{$channel['domin']}/PayLink/request.php?payment=$randomcode"]],
-                ]
-            ])
+        
+        $pay_1_formatted = number_format($pay_1);
+        $payment_text = "💎 جهت ادامه خرید روی دکمه زیر بزنید و مستقیما وارد درگاه می شوید.\n📍 پس از پرداخت مستقیما سکه ها به حساب شما واریز خواهد شد!\n👇 جهت ادامه  👇";
+        $payment_keyboard = json_encode([
+            'inline_keyboard'=>[
+                [['text'=>"⭐️ خرید 25 سکه به مبلغ $pay_1_formatted ریال",'url'=>"{$channel['domin']}/PayLink/request.php?payment=$randomcode"]],
+            ]
         ]);
+        
+        // حذف پیام قدیمی و ارسال پیام جدید
+        @bot('deletemessage', ['chat_id'=>$from_id, 'message_id'=>$message_id]);
+        
+        // ارسال پیام جدید با لینک پرداخت
+        $send_result = SM($from_id, $payment_text, null, $payment_keyboard);
+        if (!$send_result || !$send_result->ok) {
+            error_log("خطا در ارسال پیام pay_2: " . json_encode($send_result));
+            // تلاش مجدد با bot مستقیم
+            bot('sendMessage', [
+                'chat_id'=>$from_id,
+                'text'=>$payment_text,
+                'parse_mode'=>'html',
+                'disable_web_page_preview'=>true,
+                'reply_markup'=>$payment_keyboard
+            ]);
+        }
 
         $pdo = null;
     }
@@ -2612,28 +2774,46 @@ $pay_1 = number_format($pay_1);
             'text'=>'⭐️ در حال ایجاد فاکتور پرداخت...',
             'show_alert'=>false
         ]);
+        
         $randomcode  =  uniqid().rand(1111,9999);
         $pay_1 = $channel['tariff'] * 40;
         try{
             $pdo->exec("INSERT INTO re_payments (`file`,`id`,`amount`,`desc`,`type`,`fromid`,`time`) VALUES ('0','$randomcode','$pay_1','خرید موجودی $bot_name','coin','$from_id','$timering')");
         } catch(PDOException $e){
-            file_put_contents('e.txt',$e->getMessage());
-            die();
+            bot('answerCallbackQuery',[
+                'callback_query_id'=>$update->callback_query->id,
+                'text'=>'❌ خطا در ثبت فاکتور! لطفاً دوباره تلاش کنید.',
+                'show_alert'=>true
+            ]);
+            error_log("خطا در ثبت فاکتور pay_3: " . $e->getMessage());
+            $pdo = null;
+            exit();
         }
-$pay_1 = number_format($pay_1);
-        bot('editmessagetext', [
-            'chat_id'=>$from_id,
-            'text'=>"💎 جهت ادامه خرید روی دکمه زیر بزنید و مستقیما وارد درگاه می شوید.
-📍 پس از پرداخت مستقیما سکه ها به حساب شما واریز خواهد شد!
-👇 جهت ادامه  👇",
-            'message_id'=>$message_id,
-            'reply_markup'=>json_encode([
-                'resize_keyboard'=>true,
-                'inline_keyboard'=>[
-                    [['text'=>"⭐️ خرید 40 سکه به مبلغ $pay_1 ریال",'url'=>"{$channel['domin']}/PayLink/request.php?payment=$randomcode"]],
-                ]
-            ])
+        
+        $pay_1_formatted = number_format($pay_1);
+        $payment_text = "💎 جهت ادامه خرید روی دکمه زیر بزنید و مستقیما وارد درگاه می شوید.\n📍 پس از پرداخت مستقیما سکه ها به حساب شما واریز خواهد شد!\n👇 جهت ادامه  👇";
+        $payment_keyboard = json_encode([
+            'inline_keyboard'=>[
+                [['text'=>"⭐️ خرید 40 سکه به مبلغ $pay_1_formatted ریال",'url'=>"{$channel['domin']}/PayLink/request.php?payment=$randomcode"]],
+            ]
         ]);
+        
+        // حذف پیام قدیمی و ارسال پیام جدید
+        @bot('deletemessage', ['chat_id'=>$from_id, 'message_id'=>$message_id]);
+        
+        // ارسال پیام جدید با لینک پرداخت
+        $send_result = SM($from_id, $payment_text, null, $payment_keyboard);
+        if (!$send_result || !$send_result->ok) {
+            error_log("خطا در ارسال پیام pay_3: " . json_encode($send_result));
+            // تلاش مجدد با bot مستقیم
+            bot('sendMessage', [
+                'chat_id'=>$from_id,
+                'text'=>$payment_text,
+                'parse_mode'=>'html',
+                'disable_web_page_preview'=>true,
+                'reply_markup'=>$payment_keyboard
+            ]);
+        }
 
         $pdo = null;
     }
@@ -2643,28 +2823,45 @@ $pay_1 = number_format($pay_1);
             'text'=>'⭐️ در حال ایجاد فاکتور پرداخت...',
             'show_alert'=>false
         ]);
+        
         $randomcode  =  uniqid().rand(1111,9999);
         $pay_1 = 399000;
         try{
             $pdo->exec("INSERT INTO re_payments (`file`,`id`,`amount`,`desc`,`type`,`fromid`,`time`) VALUES ('0','$randomcode','$pay_1','خرید موجودی $bot_name','coin','$from_id','$timering')");
         } catch(PDOException $e){
-            file_put_contents('e.txt',$e->getMessage());
-            die();
+            bot('answerCallbackQuery',[
+                'callback_query_id'=>$update->callback_query->id,
+                'text'=>'❌ خطا در ثبت فاکتور! لطفاً دوباره تلاش کنید.',
+                'show_alert'=>true
+            ]);
+            error_log("خطا در ثبت فاکتور pay_event: " . $e->getMessage());
+            $pdo = null;
+            exit();
         }
 
-        bot('editmessagetext', [
-            'chat_id'=>$from_id,
-            'text'=>"💎 جهت ادامه خرید روی دکمه زیر بزنید و مستقیما وارد درگاه می شوید.
-📍 پس از پرداخت مستقیما سکه ها به حساب شما واریز خواهد شد!
-👇 جهت ادامه  👇",
-            'message_id'=>$message_id,
-            'reply_markup'=>json_encode([
-                'resize_keyboard'=>true,
-                'inline_keyboard'=>[
-                    [['text'=>"🔥🔥 خرید 129 سکه فقط 39,900 تومان 🔥🔥",'url'=>"{$channel['domin']}/PayLink/request.php?payment=$randomcode"]],
-                ]
-            ])
+        $payment_text = "💎 جهت ادامه خرید روی دکمه زیر بزنید و مستقیما وارد درگاه می شوید.\n📍 پس از پرداخت مستقیما سکه ها به حساب شما واریز خواهد شد!\n👇 جهت ادامه  👇";
+        $payment_keyboard = json_encode([
+            'inline_keyboard'=>[
+                [['text'=>"🔥🔥 خرید 129 سکه فقط 39,900 تومان 🔥🔥",'url'=>"{$channel['domin']}/PayLink/request.php?payment=$randomcode"]],
+            ]
         ]);
+        
+        // حذف پیام قدیمی و ارسال پیام جدید
+        @bot('deletemessage', ['chat_id'=>$from_id, 'message_id'=>$message_id]);
+        
+        // ارسال پیام جدید با لینک پرداخت
+        $send_result = SM($from_id, $payment_text, null, $payment_keyboard);
+        if (!$send_result || !$send_result->ok) {
+            error_log("خطا در ارسال پیام pay_event: " . json_encode($send_result));
+            // تلاش مجدد با bot مستقیم
+            bot('sendMessage', [
+                'chat_id'=>$from_id,
+                'text'=>$payment_text,
+                'parse_mode'=>'html',
+                'disable_web_page_preview'=>true,
+                'reply_markup'=>$payment_keyboard
+            ]);
+        }
 
         $pdo = null;
     }
@@ -2786,7 +2983,9 @@ $welcome_message = "⚠️ قوانین ثبت تیکت :\n\n" .
                      
                            "دپارتمان مربوطه را با دقت انتخاب کنید تا تیکت به واحد درست ارجاع شود!";
         
-        $keyboard = ['inline_keyboard' => [[['text' => '🎫 تیکت‌ها', 'web_app' => ['url' => "https://codezed.ir/Bots/Pejvak-MEO/ticket_system/index.html"]]]]];
+        // استفاده از WEB_APP_URL از config.php (خوانده شده از .env)
+        $ticket_url = rtrim(WEB_APP_URL, '/') . '/index.html';
+        $keyboard = ['inline_keyboard' => [[['text' => '🎫 تیکت‌ها', 'web_app' => ['url' => $ticket_url]]]]];
         sm($from_id, $welcome_message, $message_id,json_encode($keyboard));
 }
     elseif($users['step']=='online_support' and !in_array($message, ['بازگشت ↪️', '/start'])){

@@ -104,7 +104,7 @@ $date_en = date("Y/m/d H:i:s");
 
 // تنظیمات کانال اصلی
 $channel = [
-    'domin' => env('CHANNEL_DOMAIN', "https://{$_SERVER['HTTP_HOST']}/Bots/Pejvak-MEO"),
+    'domin' => env('CHANNEL_DOMAIN'),
     'MerchantID' => env('PAYMENT_MERCHANT_ID', 'zibal'),
     'username' => env('CHANNEL_USERNAME', 'PejvakSource'),
     'ch_logs' => env('CHANNEL_LOGS_ID', -1001511214347),

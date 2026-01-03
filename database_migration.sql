@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     `zm_penalty_count` INT(11) DEFAULT 0 COMMENT 'تعداد جریمه سیستم ZM',
     `last_subset` DATE DEFAULT NULL COMMENT 'تاریخ آخرین زیرمجموعه',
     `daily_subset` INT(11) DEFAULT 0 COMMENT 'تعداد زیرمجموعه روزانه',
+    `last_spin_time` INT(11) DEFAULT 0 COMMENT 'زمان آخرین چرخش گردونه شانس (timestamp)',
     PRIMARY KEY (`id`),
     INDEX `idx_inviter` (`inviter`),
     INDEX `idx_block` (`block`),
@@ -276,6 +277,7 @@ CREATE TABLE IF NOT EXISTS `sends` (
 -- ============================================
 -- جدول users: کاربران سیستم تیکت
 -- ============================================
+-- توجه: این جدول در دیتابیس جداگانه ticket است و با جدول users دیتابیس اصلی تداخلی ندارد
 CREATE TABLE IF NOT EXISTS `users` (
     `user_id` BIGINT(20) NOT NULL COMMENT 'آیدی کاربر در تلگرام',
     `user_name` VARCHAR(255) DEFAULT NULL COMMENT 'نام کاربر',
