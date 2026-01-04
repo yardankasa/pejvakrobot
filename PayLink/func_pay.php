@@ -24,11 +24,43 @@ function postToZibal($path, $parameters)
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
     curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS,json_encode($parameters));
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($parameters));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    $response  = curl_exec($ch);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15); // timeout 15 ثانیه
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10); // timeout اتصال 10 ثانیه
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    
+    $response = curl_exec($ch);
+    $curl_error = curl_error($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    return json_decode($response);
+    
+    if ($response === false || !empty($curl_error)) {
+        error_log("خطا در ارتباط با Zibal API: " . $curl_error);
+        $error_response = new stdClass();
+        $error_response->result = -1;
+        $error_response->message = "خطا در ارتباط با درگاه پرداخت: " . $curl_error;
+        return $error_response;
+    }
+    
+    if ($http_code != 200) {
+        error_log("خطا در پاسخ Zibal API - HTTP Code: " . $http_code);
+        $error_response = new stdClass();
+        $error_response->result = -1;
+        $error_response->message = "خطا در ارتباط با درگاه پرداخت (کد: $http_code)";
+        return $error_response;
+    }
+    
+    $decoded = json_decode($response);
+    if ($decoded === null) {
+        error_log("خطا در decode پاسخ Zibal: " . json_last_error_msg());
+        $error_response = new stdClass();
+        $error_response->result = -1;
+        $error_response->message = "خطا در پردازش پاسخ درگاه پرداخت";
+        return $error_response;
+    }
+    
+    return $decoded;
 }
 
 /**

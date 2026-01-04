@@ -1,12 +1,42 @@
 <?php
+// فعال کردن لاگ خطاها
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/payment_errors.log');
+
+// تنظیم timeout
+set_time_limit(30);
+ini_set('max_execution_time', 30);
+
 @require_once '../config.php';
 @require_once "func_pay.php";
+
 function bot($method, $data=[]){
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, 'https://api.telegram.org/bot'.TOKEN_POKER.'/'.$method);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-    return json_decode(curl_exec($ch));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10); // timeout 10 ثانیه
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5); // timeout اتصال 5 ثانیه
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    
+    $response = curl_exec($ch);
+    $curl_error = curl_error($ch);
+    curl_close($ch);
+    
+    if ($response === false || !empty($curl_error)) {
+        error_log("خطا در bot() - method: $method - error: " . $curl_error);
+        return (object)['ok' => false, 'error' => $curl_error];
+    }
+    
+    $decoded = json_decode($response);
+    if ($decoded === null) {
+        error_log("خطا در decode پاسخ Telegram API - method: $method");
+        return (object)['ok' => false, 'error' => 'Invalid JSON response'];
+    }
+    
+    return $decoded;
 }
 $channel['ch_logs'] = '-1001511214347';
 $bot_name = bot('GetMe')->result->first_name;
@@ -35,14 +65,27 @@ $bot_user = bot('GetMe')->result->username;
 // if($_GET['success']==1) {
     // echo "شناسه سفارش: ".$_GET['orderId']."<br>";
 
+    // بررسی وجود trackId
+    if (!isset($_GET['trackId']) || empty($_GET['trackId'])) {
+        error_log("خطا: trackId در verify.php موجود نیست");
+        echo "<!DOCTYPE HTML><html dir='rtl' lang='fa'><head><meta charset='utf-8'><title>خطا</title></head><body><h1>❌ خطا: اطلاعات پرداخت نامعتبر است</h1></body></html>";
+        exit;
+    }
+    
     //start verfication
     $parameters = array(
         "merchant" => ZIBAL_MERCHANT_KEY,//required
         "trackId" => $_GET['trackId'],//required
-
     );
 
     $response = postToZibal('verify', $parameters);
+    
+    // بررسی پاسخ
+    if (!$response || !isset($response->result)) {
+        error_log("خطا: پاسخ نامعتبر از Zibal در verify.php");
+        echo "<!DOCTYPE HTML><html dir='rtl' lang='fa'><head><meta charset='utf-8'><title>خطا</title></head><body><h1>❌ خطا در ارتباط با درگاه پرداخت</h1></body></html>";
+        exit;
+    }
 
 
   if ($response->result == 100 and $_GET['success']==1) {
