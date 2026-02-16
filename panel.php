@@ -531,8 +531,8 @@ elseif($message == 'close_panel_menu' and in_array($from_id, $Devs)){
                     'parse_mode'=>'html',
                     'reply_markup'=>json_encode(['inline_keyboard'=>[
                         [['text'=>'دریافت سورس 📥', 'url'=>'https://t.me/'.$bot_user.'?start=file_'.$query['id']]],
-                        [['text'=>'📊 آمار دانلود بصورت رایگان : 0 از '.$query['limits'], 'callback_data'=>'PejvakSource']],
-                        [['text'=>'❤️ (0)', 'callback_data'=>'flike_'.$query['id']], ['text'=>'🤖 '.$bot_name,'url'=>'https://t.me/'.$bot_user.'?start']],
+                        [['text'=>'📊 آمار دانلود بصورت رایگان : '.$query['down_count'].' از '.$query['limits'], 'callback_data'=>'PejvakSource']],
+                        [['text'=>'❤️ ('.$query['like_count'].')', 'callback_data'=>'flike_'.$query['id']], ['text'=>'🤖 '.$bot_name,'url'=>'https://t.me/'.$bot_user.'?start']],
                                     // [['text'=>"💛 خرید هاست مناسب این سورس","url"=>"https://gelinserver.ir/index.php?rp=/store/hostbot"]]
                     ]])
                 ]);

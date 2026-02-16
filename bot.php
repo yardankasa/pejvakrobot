@@ -1278,6 +1278,13 @@ elseif(preg_match('/^[\/\!\#\.]?start zm_(.*)/',$message,$match)){
                             $pdo->exec("UPDATE files SET down_count = '$dc' WHERE id = '$id' LIMIT 1");
                             $dncn = $users['down_count']+1;
                             $pdo->exec("UPDATE users SET down_count = '$dncn' WHERE id = '$from_id' LIMIT 1");
+                            $files = $pdo->query("SELECT * FROM files WHERE id = '$id' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                            $keyboard = [
+                                [['text'=>'📮 دریافت سورس', 'url'=>'https://t.me/'.$bot_user.'?start=file_'.$id]],
+                                [['text'=>'📊 آمار دانلود بصورت رایگان : '.$files['down_count'].' از '.$files['limits'], 'callback_data'=>'DNLoad']],
+                                [['text'=>'❤️ ('.$files['like_count'].')', 'callback_data'=>'flike_'.$id], ['text'=>'🤖 '.$bot_name,'url'=>'https://t.me/'.$bot_user.'?start']],
+                            ];
+                            @bot('editMessageReplyMarkup',['chat_id'=>$brand_username, 'message_id'=>$id, 'reply_markup'=> json_encode(['inline_keyboard' => $keyboard])]);
                             sm($channel['ch_logs'],"کاربر  <a href='tg://user?id=$from_id'>$first_name</a> | <a href='t.me/".str_replace('@', '', $brand_username)."/$id'>{$query['title']}</a> را دریافت کرد");
                             $pdo = null;
                         } else {
@@ -1688,8 +1695,8 @@ elseif(preg_match('/^[\/\!\#\.]?start zm_(.*)/',$message,$match)){
             'parse_mode'=>'html',
             'reply_markup'=>json_encode(['inline_keyboard'=>[
                 [['text'=>'📮 دریافت سورس', 'url'=>'https://t.me/'.$bot_user.'?start=file_'.$query['id']]],
-                [['text'=>'📊 آمار دانلود بصورت رایگان : 0 از '.$query['limits'], 'callback_data'=>'pejvakSource']],
-                [['text'=>'❤️ (0)', 'callback_data'=>'flike_'.$query['id']], ['text'=>'🤖 '.$bot_name,'url'=>'https://t.me/'.$bot_user.'?start']],
+                [['text'=>'📊 آمار دانلود بصورت رایگان : '.$query['down_count'].' از '.$query['limits'], 'callback_data'=>'pejvakSource']],
+                [['text'=>'❤️ ('.$query['like_count'].')', 'callback_data'=>'flike_'.$query['id']], ['text'=>'🤖 '.$bot_name,'url'=>'https://t.me/'.$bot_user.'?start']],
                                     
 
             ]])
@@ -3684,7 +3691,18 @@ if($chat_type=='channel'){
         }
     }
 
-    elseif($message=='DNLoad'){
+    elseif(in_array($message, ['DNLoad', 'PejvakSource', 'pejvakSource'])){
+        $id = $update->callback_query->message->message_id;
+        $chat_id = $update->callback_query->message->chat->id;
+        $files = $pdo->query("SELECT * FROM files WHERE id = '$id' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        if($files && $files['ads_type'] == 'free'){
+            $keyboard = [
+                [['text'=>'📮 دریافت سورس', 'url'=>'https://t.me/'.$bot_user.'?start=file_'.$id]],
+                [['text'=>'📊 آمار دانلود بصورت رایگان : '.$files['down_count'].' از '.$files['limits'], 'callback_data'=>'DNLoad']],
+                [['text'=>'❤️ ('.$files['like_count'].')', 'callback_data'=>'flike_'.$id], ['text'=>'🤖 '.$bot_name,'url'=>'https://t.me/'.$bot_user.'?start']],
+            ];
+            bot('editMessageReplyMarkup',['chat_id'=>$chat_id, 'message_id'=>$id, 'reply_markup'=> json_encode(['inline_keyboard' => $keyboard])]);
+        }
         bot('answerCallbackQuery', [
             'callback_query_id'=> $update->callback_query->id,
             'text' =>"❓ این دکمه جهت نمایش تعداد و ظرفیت دانلود رایگان این سورس است!
