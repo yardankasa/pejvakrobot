@@ -178,6 +178,7 @@
     <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
       <button onclick="navigateToAdminPanel(1)" class="btn w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-xl">مشاهده تیکت‌ها</button>
       <button id="user-management-btn" onclick="navigateToUserManagement(1)" class="btn w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-xl">مدیریت کاربران</button>
+      <button id="admin-display-name-btn" onclick="openAdminDisplayNameModal()" class="btn w-full bg-amber-600 text-white font-bold py-3 px-4 rounded-xl hidden">تنظیم نام نمایشی</button>
     </div>
   </div>
 
@@ -282,13 +283,25 @@
   </div>
 
   <div id="ticket-chat-page" class="hidden flex-grow flex flex-col">
-    <div class="p-4 border-b sticky top-0 z-10 flex items-center section-bg">
-      <button onclick="navigateBackFromChat()" class="p-2 rounded-full hover:bg-gray-200/50" aria-label="بازگشت">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-      </button>
-      <div class="mr-2 flex-grow">
-        <h2 id="chat-ticket-title" class="font-bold truncate"></h2>
-        <p id="chat-ticket-meta" class="text-xs truncate" style="color: var(--tg-theme-subtitle-text-color);"></p>
+    <div class="p-4 border-b sticky top-0 z-10 section-bg">
+      <div class="flex items-center mb-2">
+        <button onclick="navigateBackFromChat()" class="p-2 rounded-full hover:bg-gray-200/50" aria-label="بازگشت">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <div class="mr-2 flex-grow min-w-0">
+          <h2 id="chat-ticket-title" class="font-bold truncate"></h2>
+          <p id="chat-ticket-meta" class="text-xs truncate" style="color: var(--tg-theme-subtitle-text-color);"></p>
+        </div>
+      </div>
+      <div id="chat-user-profile-card" class="hidden p-3 rounded-xl mt-2" style="background: var(--tg-theme-secondary-bg-color);">
+        <div class="flex items-center gap-3">
+          <img id="chat-user-avatar" src="" alt="" class="w-14 h-14 rounded-full object-cover" />
+          <div class="flex-grow min-w-0">
+            <div id="chat-user-name" class="font-bold truncate"></div>
+            <div id="chat-user-username" class="text-sm truncate" style="color: var(--tg-theme-link-color);"></div>
+            <div id="chat-user-id" class="text-xs mt-0.5" style="color: var(--tg-theme-subtitle-text-color);"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -333,6 +346,7 @@
     let currentUserPage = 1;
     let currentUserId = null;
     let userData = null;
+    let adminDisplayName = null;
 
     /* =====================
        Helpers (UX, Theme, A11y)
@@ -353,7 +367,10 @@
       Object.entries(attrs).forEach(([k,v]) => {
         if (k === 'class') n.className = v; else if (k === 'style') n.setAttribute('style', v); else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.substring(2), v); else if (v !== undefined && v !== null) n.setAttribute(k, v);
       });
-      (Array.isArray(children)?children:[children]).filter(Boolean).forEach(c => n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c));
+      (Array.isArray(children)?children:[children]).filter(Boolean).forEach(c => {
+        const node = (typeof c === 'string' || typeof c === 'number') ? document.createTextNode(String(c)) : (c instanceof Node ? c : document.createTextNode(String(c)));
+        n.appendChild(node);
+      });
       return n;
     }
 
@@ -477,6 +494,7 @@
         const res = await apiCall(`${API_URL}?action=initialize`, new FormData());
         if(res.status==='success'){
           userRole = res.data.role; userData = res.data.user; currentUserId = userData.id;
+          adminDisplayName = res.data.admin_display_name || null;
           displayUserProfile(userData);
           setupUIForRole();
           showPage('main-menu-page');
@@ -487,11 +505,14 @@
     function setupUIForRole(){
       const adminActions = document.getElementById('admin-actions');
       const userMgmtBtn = document.getElementById('user-management-btn');
+      const adminDisplayBtn = document.getElementById('admin-display-name-btn');
       if (userRole==='admin' || userRole==='super_admin'){
         adminActions.classList.remove('hidden');
+        if (adminDisplayBtn) { adminDisplayBtn.classList.remove('hidden'); adminDisplayBtn.style.display = 'block'; }
         userMgmtBtn.style.display = (userRole==='super_admin') ? 'block' : 'none';
       } else {
         adminActions.classList.add('hidden');
+        if (adminDisplayBtn) adminDisplayBtn.classList.add('hidden');
       }
     }
 
@@ -509,7 +530,7 @@
         profilePic.src = user.photo_url; profilePic.alt = fullName || 'Profile';
       } else {
         const firstLetter = (fullName.charAt(0) || 'U').toUpperCase();
-        profilePic.src = `https://placehold.co/80x80/E2E8F0/4A5568?text=${encodeURIComponent(firstLetter)}`;
+        profilePic.src = `https://placehold.co/80x80/E2E8F0/4A5568?text=${safeUriText(firstLetter)}`;
         profilePic.alt = firstLetter;
       }
     }
@@ -553,10 +574,10 @@
         if(res.status==='success'){
           const c = document.getElementById('admin-tickets-list-container'); c.innerHTML='';
           if(res.data.tickets.length===0){ c.innerHTML = '<p class="text-center p-4" style="color: var(--tg-theme-hint-color);">تیکتی یافت نشد.</p>'; }
-          else res.data.tickets.forEach(t => c.appendChild(createTicketElement(t,'admin')));
+          else res.data.tickets.forEach(t => { const node = createTicketElement(t,'admin'); if (node) c.appendChild(node); });
           renderPagination('admin-pagination-container', res.data.total_pages, res.data.current_page, navigateToAdminPanel);
         }
-      }catch{ showError('#admin-tickets-list-container'); }
+      }catch(e){ showError('#admin-tickets-list-container', e?.message || 'خطا در بارگذاری'); }
     }
 
     async function navigateToUserManagement(page=1){
@@ -569,10 +590,10 @@
         if(res.status==='success'){
           const c = document.getElementById('admin-users-list-container'); c.innerHTML='';
           if(res.data.users.length===0){ c.innerHTML = '<p class="text-center p-4" style="color: var(--tg-theme-hint-color);">کاربری یافت نشد.</p>'; }
-          else res.data.users.forEach(u => c.appendChild(createUserElement(u)));
+          else res.data.users.forEach(u => { const node = createUserElement(u); if (node) c.appendChild(node); });
           renderPagination('admin-user-pagination-container', res.data.total_pages, res.data.current_page, navigateToUserManagement);
         }
-      }catch{ showError('#admin-users-list-container'); }
+      }catch(e){ showError('#admin-users-list-container', e?.message || 'خطا در بارگذاری'); }
     }
 
     function renderPagination(containerId, total, current, cb){
@@ -595,38 +616,79 @@
         const c = document.getElementById('tickets-list-container'); c.innerHTML='';
         if(res.status==='success'){
           if(res.data.length===0) c.innerHTML = '<p class="text-center p-4" style="color: var(--tg-theme-hint-color);">شما هیچ تیکتی ندارید.</p>';
-          else res.data.forEach(t => c.appendChild(createTicketElement(t,'user')));
+          else res.data.forEach(t => { const node = createTicketElement(t,'user'); if (node) c.appendChild(node); });
         }
       }catch{ showError('#tickets-list-container'); }
     }
 
+    function safeUriText(s){
+      try { return encodeURIComponent(String(s)); } catch (_) { return 'U'; }
+    }
+
+    function getUserAvatar(user){
+      if (user?.photo_url) return user.photo_url;
+      const fn = (user?.first_name||user?.user_name||'').trim();
+      const ln = (user?.last_name||'').trim();
+      const full = (fn+' '+ln).trim() || 'U';
+      const letter = full.charAt(0).toUpperCase() || 'U';
+      return `https://placehold.co/80x80/E2E8F0/4A5568?text=${safeUriText(letter)}`;
+    }
+
     function createTicketElement(ticket, view){
+      if (!ticket) return null;
       const statusCls={open:'status-open', answered:'status-answered', closed:'status-closed'};
       const statusTxt={open:'باز', answered:'پاسخ داده شده', closed:'بسته شده'};
       const deptTxt={technical:'فنی', sales:'فروش', billing:'مالی', other:'سایر'};
-      const item = el('div', {class:'ticket-item cursor-pointer p-4 border-b flex justify-between items-center hover:bg-[var(--tg-theme-secondary-bg-color)] anim-fade-in', style:'border-color: var(--tg-theme-hint-color);', role:'button', tabindex:'0'});
+      const item = el('div', {class:'ticket-item cursor-pointer p-4 border-b hover:bg-[var(--tg-theme-secondary-bg-color)] anim-fade-in section-bg rounded-xl mb-2', style:'border-color: var(--tg-theme-hint-color);', role:'button', tabindex:'0'});
       item.addEventListener('click', ()=>showTicketChat(ticket.id));
       item.addEventListener('keydown', (e)=>{ if(e.key==='Enter') showTicketChat(ticket.id); });
 
+      const userName = [ticket.first_name, ticket.last_name].filter(Boolean).join(' ').trim() || ticket.user_name || 'کاربر';
+      const userUsername = ticket.username ? '@'+ticket.username : '';
+      const userAvatar = getUserAvatar(ticket);
+
       let adminControls='';
       if (view==='admin' && (userRole==='admin' || userRole==='super_admin')){
-        const label = ticket.is_banned ? 'رفع مسدودیت' : 'مسدود کردن کاربر';
+        const label = ticket.is_banned ? 'رفع مسدودیت' : 'مسدود کردن';
         const color = ticket.is_banned ? 'bg-emerald-600' : 'bg-rose-600';
         adminControls = `<button class="text-xs text-white px-2 py-1 rounded ${color}" data-user="${ticket.user_id}" data-banned="${ticket.is_banned}">${label}</button>`;
       }
 
-      item.innerHTML = `
-        <div>
-          <div class="font-medium truncate max-w-[200px]">${escapeHTML(ticket.title)}</div>
-          <div class="text-xs mt-1" style="color: var(--tg-theme-subtitle-text-color);">${escapeHTML(deptTxt[ticket.department]||ticket.department)} • ${new Date(ticket.updated_at).toLocaleDateString('fa-IR')}</div>
-        </div>
-        <div class="flex flex-col items-end gap-2">
-          <span class="status-badge ${statusCls[ticket.status]}">${statusTxt[ticket.status]}</span>
-          ${adminControls}
+      if (view==='admin'){
+        item.innerHTML = `
+        <div class="flex gap-3">
+          <img src="${userAvatar}" alt="${escapeHTML(userName)}" class="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+          <div class="flex-grow min-w-0">
+            <div class="flex justify-between items-start gap-2">
+              <div>
+                <div class="font-bold truncate">${escapeHTML(userName)}</div>
+                ${userUsername ? `<div class="text-xs" style="color: var(--tg-theme-link-color);">${escapeHTML(userUsername)}</div>` : ''}
+                <div class="text-xs mt-0.5" style="color: var(--tg-theme-subtitle-text-color);">ID: ${ticket.user_id}</div>
+              </div>
+              <span class="status-badge ${statusCls[ticket.status]} flex-shrink-0">${statusTxt[ticket.status]}</span>
+            </div>
+            <div class="font-medium truncate mt-2" style="color: var(--tg-theme-text-color);">${escapeHTML(ticket.title)}</div>
+            <div class="text-xs mt-1 flex flex-wrap gap-2" style="color: var(--tg-theme-hint-color);">
+              <span>${escapeHTML(deptTxt[ticket.department]||ticket.department)}</span>
+              <span>•</span>
+              <span>${new Date(ticket.updated_at).toLocaleDateString('fa-IR')}</span>
+            </div>
+            <div class="mt-2 flex gap-2">${adminControls}</div>
+          </div>
         </div>`;
+      } else {
+        item.innerHTML = `
+        <div class="flex justify-between items-center">
+          <div>
+            <div class="font-medium truncate max-w-[200px]">${escapeHTML(ticket.title)}</div>
+            <div class="text-xs mt-1" style="color: var(--tg-theme-subtitle-text-color);">${escapeHTML(deptTxt[ticket.department]||ticket.department)} • ${new Date(ticket.updated_at).toLocaleDateString('fa-IR')}</div>
+          </div>
+          <span class="status-badge ${statusCls[ticket.status]}">${statusTxt[ticket.status]}</span>
+        </div>`;
+      }
 
       if (view==='admin' && (userRole==='admin' || userRole==='super_admin')) {
-        const b = item.querySelector('button');
+        const b = item.querySelector('button[data-user]');
         if (b) b.addEventListener('click', (e)=>{ e.stopPropagation(); toggleBanUser(+b.dataset.user, +b.dataset.banned); });
       }
 
@@ -634,6 +696,7 @@
     }
 
     function createUserElement(user){
+      if (!user) return null;
       const roleTxt = { user:'کاربر', admin:'ادمین', super_admin:'سوپر ادمین' };
       const isUser = user.role==='user';
       const roleLabel = isUser ? 'ادمین کردن' : 'کاربر کردن';
@@ -676,6 +739,20 @@
           metaEl.textContent = `${t.department} • ${new Date(t.created_at).toLocaleString('fa-IR')}`;
           c.innerHTML='';
 
+          const profileCard = document.getElementById('chat-user-profile-card');
+          if (profileCard && (userRole==='admin'||userRole==='super_admin') && t.user_id) {
+            profileCard.classList.remove('hidden');
+            const userName = [t.first_name, t.last_name].filter(Boolean).join(' ').trim() || t.user_name || 'کاربر';
+            document.getElementById('chat-user-avatar').src = getUserAvatar(t);
+            document.getElementById('chat-user-avatar').alt = userName;
+            document.getElementById('chat-user-name').textContent = userName;
+            document.getElementById('chat-user-username').textContent = t.username ? '@'+t.username : '';
+            document.getElementById('chat-user-username').style.display = t.username ? 'block' : 'none';
+            document.getElementById('chat-user-id').textContent = 'ID: ' + t.user_id;
+          } else if (profileCard) {
+            profileCard.classList.add('hidden');
+          }
+
           if (other.length>0 && (userRole==='admin'||userRole==='super_admin')){
             const statusTxt={open:'باز', answered:'پاسخ داده شده', closed:'بسته شده'};
             const box = el('div', {class:'mb-3 p-2 rounded-lg text-sm section-bg anim-scale-in'});
@@ -684,7 +761,7 @@
             box.querySelectorAll('[data-open]').forEach(a=>a.addEventListener('click',(e)=>{ e.preventDefault(); showTicketChat(+a.dataset.open); }));
           }
 
-          msgs.forEach(m => c.appendChild(createMessageElement(m)));
+          msgs.forEach(m => { const msgEl = createMessageElement(m); if (msgEl) c.appendChild(msgEl); });
 
           if (t.status==='closed') { reopen.classList.remove('hidden'); document.getElementById('chat-reply-container').classList.add('hidden'); }
           else { reopen.classList.add('hidden'); document.getElementById('chat-reply-container').classList.remove('hidden'); (userRole==='admin'||userRole==='super_admin')?adminActs.classList.remove('hidden'):adminActs.classList.add('hidden'); }
@@ -694,6 +771,7 @@
     }
 
     function createMessageElement(msg){
+      if (!msg) return null;
       const isSelf = msg.sender_id == currentUserId;
       const wrap = el('div', {class:'flex flex-col anim-fade-in'});
       const alignment = isSelf ? 'justify-end' : 'justify-start';
@@ -712,9 +790,12 @@
         }
       }
 
+      const adminLabel = (!isSelf && msg.sender_type==='admin' && msg.admin_display_name) ? `<span class="text-xs font-medium block mb-1" style="color: var(--tg-theme-hint-color);">${escapeHTML(msg.admin_display_name)}</span>` : '';
+
       wrap.innerHTML = `
         <div class="flex ${alignment}">
           <div class="max-w-xs md:max-w-md p-3 ${bubbleCls}">
+            ${adminLabel}
             <p class="text-sm whitespace-pre-wrap">${safeMsg}</p>
             ${attach}
           </div>
@@ -777,12 +858,17 @@
       const txt = msgInput.value.trim();
       const fi = document.getElementById('reply-attachment-input');
       if (!txt && fi.files.length===0) return;
+      if ((userRole==='admin' || userRole==='super_admin') && !adminDisplayName) {
+        openAdminDisplayNameModal(()=> document.getElementById('reply-form').requestSubmit());
+        return;
+      }
       document.getElementById('chat-loading-indicator').classList.remove('hidden');
       const sendBtn = e.target.querySelector('button[type="submit"]'); sendBtn.disabled = true;
       try{
         const fd = new FormData(); fd.append('ticket_id', currentTicketId); fd.append('message', txt);
         if (fi.files.length>0) fd.append('attachment', fi.files[0]);
         if (userRole==='admin' || userRole==='super_admin'){
+          if (adminDisplayName) fd.append('admin_display_name', adminDisplayName);
           const closeCb = document.getElementById('close-ticket-checkbox'); if (closeCb?.checked) fd.append('close_ticket','true');
         }
         const res = await apiCall(`${API_URL}?action=add_reply`, fd);
@@ -791,7 +877,7 @@
           msgInput.value=''; removeAttachment('reply-attachment-input','reply-attachment-preview');
           if (userRole==='admin'||userRole==='super_admin') { const cb=document.getElementById('close-ticket-checkbox'); if(cb) cb.checked=false; }
           if (res.data?.new_message) {
-            document.getElementById('chat-messages-container').appendChild(createMessageElement(res.data.new_message));
+            const msgEl = createMessageElement(res.data.new_message); if (msgEl) document.getElementById('chat-messages-container').appendChild(msgEl);
             const m=document.getElementById('chat-messages-container'); m.scrollTop=m.scrollHeight;
           } else { await showTicketChat(currentTicketId); }
         }
@@ -833,6 +919,35 @@
 
     async function handleSendDirectMessage(userId, message){
       try{ const fd=new FormData(); fd.append('user_id', userId); fd.append('message', message); const res = await apiCall(`${API_URL}?action=send_direct_message`, fd); tg?.HapticFeedback?.notificationOccurred?.('success'); toast({title:'پیام ارسال شد', message: res.message||'', type:'success'}); }catch{}
+    }
+
+    function openAdminDisplayNameModal(onAfterSave){
+      const input = el('input', {type:'text', class:'w-full p-3 border rounded-lg', placeholder:'مثال: علی از پشتیبانی'});
+      input.value = adminDisplayName || '';
+      const label = el('p', {class:'text-sm mb-2', style:'color: var(--tg-theme-subtitle-text-color);'}, 'این نام در پاسخ‌های شما به کاربران نمایش داده می‌شود تا بدانند کدام ادمین پاسخ داده است.');
+      const wrap = el('div', {}, [label, input]);
+      showModal({
+        title: 'تنظیم نام نمایشی ادمین',
+        content: wrap,
+        actions: [
+          {label:'انصراف', variant:'neutral', onClick: hideModal},
+          {label:'ذخیره', variant:'primary', onClick: async ()=>{
+            const name = input.value.trim();
+            if (!name) { toast({title:'نام نمایشی الزامی است', type:'warn'}); return; }
+            try {
+              const fd = new FormData(); fd.append('admin_display_name', name);
+              const res = await apiCall(`${API_URL}?action=set_admin_display_name`, fd);
+              if (res.status==='success') {
+                adminDisplayName = name;
+                hideModal();
+                toast({title:'نام نمایشی ذخیره شد', type:'success'});
+                if (typeof onAfterSave==='function') onAfterSave();
+              }
+            } catch {}
+          }}
+        ]
+      });
+      setTimeout(()=> input.focus(), 100);
     }
 
     async function toggleUserRole(userId, currentRole){

@@ -81,11 +81,38 @@ try {
     $stmt->execute([$user_id]);
     $user_record = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    $first_name = $user_data['first_name'] ?? null;
+    $last_name = $user_data['last_name'] ?? null;
+    $photo_url = $user_data['photo_url'] ?? null;
+
     if (!$user_record) {
         $role = in_array($user_id, SUPER_ADMIN_IDS) ? 'super_admin' : 'user';
-        $stmt = $pdo->prepare("INSERT IGNORE INTO users (user_id, user_name, username, role) VALUES (?, ?, ?, ?)");
-        $stmt->execute([$user_id, $user_name, $username, $role]);
+        try {
+            $stmt = $pdo->prepare("INSERT INTO users (user_id, user_name, username, first_name, last_name, photo_url, role) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$user_id, $user_name, $username, $first_name, $last_name, $photo_url, $role]);
+        } catch (PDOException $e) {
+            if (strpos($e->getMessage(), 'Duplicate') !== false) {
+                try {
+                    $stmt = $pdo->prepare("UPDATE users SET user_name=?, username=?, first_name=?, last_name=?, photo_url=? WHERE user_id=?");
+                    $stmt->execute([$user_name, $username, $first_name, $last_name, $photo_url, $user_id]);
+                } catch (PDOException $e2) {
+                    $stmt = $pdo->prepare("UPDATE users SET user_name=?, username=? WHERE user_id=?");
+                    $stmt->execute([$user_name, $username, $user_id]);
+                }
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO users (user_id, user_name, username, role) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$user_id, $user_name, $username, $role]);
+            }
+        }
         $user_record = ['role' => $role, 'is_banned' => 0];
+    } else {
+        try {
+            $stmt = $pdo->prepare("UPDATE users SET user_name=?, username=?, first_name=?, last_name=?, photo_url=? WHERE user_id=?");
+            $stmt->execute([$user_name, $username, $first_name, $last_name, $photo_url, $user_id]);
+        } catch (PDOException $e) {
+            $stmt = $pdo->prepare("UPDATE users SET user_name=?, username=? WHERE user_id=?");
+            $stmt->execute([$user_name, $username, $user_id]);
+        }
     }
 
     if ($user_record['is_banned'] && !in_array($user_record['role'], ['admin', 'super_admin'])) { throw new Exception('شما از سیستم پشتیبانی مسدود شده‌اید.', 403); }
@@ -96,10 +123,20 @@ try {
     $request_data = $_POST;
     switch ($action) {
         case 'initialize':
-            // Optional: Generate CSRF token if needed
-            // $csrf_token = bin2hex(random_bytes(32));
-            // $_SESSION['csrf_token'] = $csrf_token; // Requires session_start()
-            echo json_encode(['status' => 'success', 'data' => ['role' => $user_record['role'], 'user' => $user_data /*, 'csrf_token' => $csrf_token */]]);
+            $user_response = array_merge($user_data, [
+                'photo_url' => $photo_url ?? $user_data['photo_url'] ?? null
+            ]);
+            $admin_display = null;
+            try {
+                $stmt = $pdo->prepare("SELECT admin_display_name FROM users WHERE user_id = ?");
+                $stmt->execute([$user_id]);
+                $admin_display = $stmt->fetchColumn();
+            } catch (PDOException $e) { /* column may not exist yet */ }
+            echo json_encode(['status' => 'success', 'data' => [
+                'role' => $user_record['role'],
+                'user' => $user_response,
+                'admin_display_name' => $admin_display
+            ]]);
             break;
         case 'get_dashboard_stats': get_dashboard_stats($pdo, $is_admin); break;
         case 'get_tickets': get_tickets($pdo, $user_id); break;
@@ -113,6 +150,8 @@ try {
         case 'get_users': get_users($pdo, $is_super_admin, $request_data); break;
         case 'send_direct_message': send_direct_message($pdo, $is_admin, $request_data); break;
         case 'set_user_role': set_user_role($pdo, $is_super_admin, $request_data); break;
+        case 'set_admin_display_name': set_admin_display_name($pdo, $is_admin, $user_id, $request_data); break;
+        case 'get_admin_display_name': get_admin_display_name($pdo, $user_id); break;
         default: throw new Exception('Invalid action.', 400);
     }
 
@@ -147,10 +186,11 @@ function get_all_tickets($pdo, $is_admin, $data) {
     $page = isset($data['page']) ? (int)$data['page'] : 1;
     $limit = 20;
     $offset = ($page - 1) * $limit;
-    $sql = "SELECT SQL_CALC_FOUND_ROWS t.id, u.user_name, t.title, t.department, t.status, t.updated_at FROM tickets t JOIN users u ON t.user_id = u.user_id WHERE 1=1";
     $params = [];
+    $sql = "SELECT SQL_CALC_FOUND_ROWS t.id, t.user_id, u.user_name, u.username, u.is_banned, t.title, t.department, t.status, t.updated_at, t.created_at FROM tickets t JOIN users u ON t.user_id = u.user_id WHERE 1=1";
     if (!empty($data['search'])) {
-        $sql .= " AND (t.title LIKE ? OR u.user_name LIKE ? OR t.id = ?)";
+        $sql .= " AND (t.title LIKE ? OR u.user_name LIKE ? OR u.username LIKE ? OR t.id = ?)";
+        $params[] = '%' . $data['search'] . '%';
         $params[] = '%' . $data['search'] . '%';
         $params[] = '%' . $data['search'] . '%';
         $params[] = $data['search'];
@@ -162,6 +202,7 @@ function get_all_tickets($pdo, $is_admin, $data) {
     $stmt->execute($params);
     $tickets = $stmt->fetchAll(PDO::FETCH_ASSOC);
     $total_records = $pdo->query("SELECT FOUND_ROWS()")->fetchColumn();
+    foreach ($tickets as &$t) { $t['first_name'] = null; $t['last_name'] = null; $t['photo_url'] = null; }
     echo json_encode(['status' => 'success', 'data' => ['tickets' => $tickets, 'total_pages' => ceil($total_records / $limit), 'current_page' => $page]]);
 }
 
@@ -173,9 +214,23 @@ function get_ticket_details($pdo, $user_id, $ticket_id, $is_admin) {
     $stmt->execute($params);
     $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$ticket) { throw new Exception('تیکت یافت نشد.', 404); }
-    $stmt = $pdo->prepare("SELECT tm.id, tm.sender_id, tm.sender_type, tm.message, tm.created_at, ta.file_path, ta.original_name, ta.file_type FROM ticket_messages tm LEFT JOIN ticket_attachments ta ON tm.id = ta.message_id WHERE tm.ticket_id = ? ORDER BY tm.created_at ASC");
-    $stmt->execute([$ticket_id]);
-    $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $ticket['first_name'] = null; $ticket['last_name'] = null; $ticket['photo_url'] = null;
+    try {
+        $stmt_ext = $pdo->prepare("SELECT first_name, last_name, photo_url FROM users WHERE user_id = ?");
+        $stmt_ext->execute([$ticket['user_id']]);
+        $ext = $stmt_ext->fetch(PDO::FETCH_ASSOC);
+        if ($ext) { $ticket['first_name'] = $ext['first_name']; $ticket['last_name'] = $ext['last_name']; $ticket['photo_url'] = $ext['photo_url']; }
+    } catch (PDOException $e) { /* columns may not exist */ }
+    try {
+        $stmt = $pdo->prepare("SELECT tm.id, tm.sender_id, tm.sender_type, tm.admin_display_name, tm.message, tm.created_at, ta.file_path, ta.original_name, ta.file_type FROM ticket_messages tm LEFT JOIN ticket_attachments ta ON tm.id = ta.message_id WHERE tm.ticket_id = ? ORDER BY tm.created_at ASC");
+        $stmt->execute([$ticket_id]);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $stmt = $pdo->prepare("SELECT tm.id, tm.sender_id, tm.sender_type, tm.message, tm.created_at, ta.file_path, ta.original_name, ta.file_type FROM ticket_messages tm LEFT JOIN ticket_attachments ta ON tm.id = ta.message_id WHERE tm.ticket_id = ? ORDER BY tm.created_at ASC");
+        $stmt->execute([$ticket_id]);
+        $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($messages as &$m) { $m['admin_display_name'] = null; }
+    }
     $other_tickets = [];
     if ($is_admin) {
         $stmt_other = $pdo->prepare("SELECT id, title, status FROM tickets WHERE user_id = ? AND id != ? ORDER BY updated_at DESC LIMIT 5");
@@ -230,6 +285,7 @@ function add_reply($pdo, $sender_id, $data, $file, $is_admin) {
     $ticket_id = $data['ticket_id'] ?? 0;
     $message = $data['message'] ?? '';
     $sender_type = $is_admin ? 'admin' : 'user';
+    $admin_display_name = $is_admin ? ($data['admin_display_name'] ?? null) : null;
     $sql = "SELECT user_id, status FROM tickets WHERE id = ?";
     $params = [$ticket_id];
     if (!$is_admin) { $sql .= " AND user_id = ?"; $params[] = $sender_id; }
@@ -239,8 +295,13 @@ function add_reply($pdo, $sender_id, $data, $file, $is_admin) {
     if (!$ticket) { throw new Exception('تیکت یافت نشد.', 404); }
     if ($ticket['status'] === 'closed') { throw new Exception('این تیکت بسته شده است.', 403); }
     $pdo->beginTransaction();
-    $stmt = $pdo->prepare("INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, message) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$ticket_id, $sender_id, $sender_type, $message]);
+    try {
+        $stmt = $pdo->prepare("INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, admin_display_name, message) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$ticket_id, $sender_id, $sender_type, $admin_display_name, $message]);
+    } catch (PDOException $e) {
+        $stmt = $pdo->prepare("INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, message) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$ticket_id, $sender_id, $sender_type, $message]);
+    }
     $message_id = $pdo->lastInsertId();
     if ($file) handle_attachment($pdo, $message_id, $file);
     if ($is_admin) {
@@ -255,11 +316,17 @@ function add_reply($pdo, $sender_id, $data, $file, $is_admin) {
     $stmt->execute([$new_status, $ticket_id]);
     $pdo->commit();
 
-    // --- New: Fetch and return the newly created message ---
-    $stmt_new_msg = $pdo->prepare("SELECT tm.id, tm.sender_id, tm.sender_type, tm.message, tm.created_at, ta.file_path, ta.original_name, ta.file_type FROM ticket_messages tm LEFT JOIN ticket_attachments ta ON tm.id = ta.message_id WHERE tm.id = ?");
-    $stmt_new_msg->execute([$message_id]);
-    $new_message = $stmt_new_msg->fetch(PDO::FETCH_ASSOC);
-    // --- End New ---
+    // --- Fetch and return the newly created message ---
+    try {
+        $stmt_new_msg = $pdo->prepare("SELECT tm.id, tm.sender_id, tm.sender_type, tm.admin_display_name, tm.message, tm.created_at, ta.file_path, ta.original_name, ta.file_type FROM ticket_messages tm LEFT JOIN ticket_attachments ta ON tm.id = ta.message_id WHERE tm.id = ?");
+        $stmt_new_msg->execute([$message_id]);
+        $new_message = $stmt_new_msg->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $stmt_new_msg = $pdo->prepare("SELECT tm.id, tm.sender_id, tm.sender_type, tm.message, tm.created_at, ta.file_path, ta.original_name, ta.file_type FROM ticket_messages tm LEFT JOIN ticket_attachments ta ON tm.id = ta.message_id WHERE tm.id = ?");
+        $stmt_new_msg->execute([$message_id]);
+        $new_message = $stmt_new_msg->fetch(PDO::FETCH_ASSOC);
+        if ($new_message) $new_message['admin_display_name'] = null;
+    }
 
     echo json_encode(['status' => 'success', 'message' => 'پاسخ شما ثبت شد.', 'data' => ['new_message' => $new_message]]);
 }
@@ -285,8 +352,19 @@ function reopen_ticket($pdo, $user_id, $ticket_id, $is_admin) {
     $stmt->execute([$ticket_id]);
     $message = $is_admin ? "تیکت توسط مدیر بازگشایی شد." : "تیکت توسط کاربر بازگشایی شد.";
     $sender_type = $is_admin ? 'admin' : 'user';
-    $stmt = $pdo->prepare("INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, message) VALUES (?, ?, ?, ?)");
-    $stmt->execute([$ticket_id, $user_id, $sender_type, $message]);
+    try {
+        $admin_display = null;
+        if ($is_admin) {
+            $stmt_ad = $pdo->prepare("SELECT admin_display_name FROM users WHERE user_id = ?");
+            $stmt_ad->execute([$user_id]);
+            $admin_display = $stmt_ad->fetchColumn();
+        }
+        $stmt = $pdo->prepare("INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, admin_display_name, message) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$ticket_id, $user_id, $sender_type, $admin_display, $message]);
+    } catch (PDOException $e) {
+        $stmt = $pdo->prepare("INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, message) VALUES (?, ?, ?, ?)");
+        $stmt->execute([$ticket_id, $user_id, $sender_type, $message]);
+    }
     echo json_encode(['status' => 'success', 'message' => 'تیکت با موفقیت باز شد.']);
 }
 
@@ -303,7 +381,7 @@ function get_users($pdo, $is_super_admin, $data) {
         $params[] = '%' . $data['search'] . '%';
         $params[] = $data['search'];
     }
-    $sql .= " ORDER BY first_seen DESC LIMIT $limit OFFSET $offset";
+    $sql .= " ORDER BY user_id DESC LIMIT $limit OFFSET $offset";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -329,6 +407,26 @@ function set_user_role($pdo, $is_super_admin, $data) {
     $stmt = $pdo->prepare("UPDATE users SET role = ? WHERE user_id = ?");
     $stmt->execute([$role, $target_user_id]);
     echo json_encode(['status' => 'success', 'message' => 'نقش کاربر با موفقیت تغییر کرد.']);
+}
+
+function set_admin_display_name($pdo, $is_admin, $user_id, $data) {
+    if (!$is_admin) { throw new Exception('Access Denied.', 403); }
+    $name = trim($data['admin_display_name'] ?? '');
+    if (strlen($name) > 100) { throw new Exception('نام نمایشی نباید بیشتر از ۱۰۰ کاراکتر باشد.', 400); }
+    try {
+        $stmt = $pdo->prepare("UPDATE users SET admin_display_name = ? WHERE user_id = ? AND role IN ('admin', 'super_admin')");
+        $stmt->execute([$name ?: null, $user_id]);
+    } catch (PDOException $e) {
+        throw new Exception('ستون admin_display_name وجود ندارد. لطفاً migrate_ticket_profile.php را اجرا کنید.', 500);
+    }
+    echo json_encode(['status' => 'success', 'message' => 'نام نمایشی ذخیره شد.', 'data' => ['admin_display_name' => $name ?: null]]);
+}
+
+function get_admin_display_name($pdo, $user_id) {
+    $stmt = $pdo->prepare("SELECT admin_display_name FROM users WHERE user_id = ?");
+    $stmt->execute([$user_id]);
+    $name = $stmt->fetchColumn();
+    echo json_encode(['status' => 'success', 'data' => ['admin_display_name' => $name]]);
 }
 
 function notify_admins($message) {
