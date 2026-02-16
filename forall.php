@@ -9,6 +9,8 @@ require_once 'config.php';
 
 $send = $pdo->query("SELECT * FROM send_all WHERE id = '85' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 $send_vip = $pdo->query("SELECT * FROM send_all WHERE id = '86' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+if (!$send) $send = ['type' => '-', 'count' => 0, 'msg_id' => null];
+if (!$send_vip) $send_vip = ['type' => '-', 'count' => 0, 'msg_id' => null];
 
 $menu = json_encode(['keyboard'=>[
      
@@ -51,13 +53,14 @@ if($send['type']=='forward'){
     }
 }
 
-if($send['type']=='source'){
+if(isset($send['type']) && $send['type']=='source' && !empty($send['msg_id'])){
     $bot_name = bot('GetMe')->result->first_name;
     $bot_user = bot('GetMe')->result->username;
+    $send['count'] = $send['count'] ?? 0;
     $query = $pdo->query("SELECT id FROM users LIMIT 100 OFFSET {$send['count']}")->fetchAll();
     foreach($query as $users){
         $data = $pdo->query("SELECT * FROM files WHERE id = '{$send['msg_id']}' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-        if($data['ads_type']=='free'){
+        if($data && isset($data['ads_type']) && $data['ads_type']=='free'){
             bot('sendPhoto', [
                 'chat_id'=>$users['id'],
                 'photo'=>$data['cover'],
@@ -93,13 +96,14 @@ if($send['type']=='source'){
 }
 //-----------------------------------------------------------
 
-if($send_vip['type']=='source_vip'){
+if(isset($send_vip['type']) && $send_vip['type']=='source_vip' && !empty($send_vip['msg_id'])){
     $bot_name = bot('GetMe')->result->first_name;
     $bot_user = bot('GetMe')->result->username;
-    $query = $pdo->query("SELECT id FROM users LIMIT 100 OFFSET {$send['count']}")->fetchAll();
+    $send_vip['count'] = $send_vip['count'] ?? 0;
+    $query = $pdo->query("SELECT id FROM users LIMIT 100 OFFSET {$send_vip['count']}")->fetchAll();
     foreach($query as $users){
-        $data = $pdo->query("SELECT * FROM files WHERE id = '{$send['msg_id']}' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-        if($data['ads_type']=='vip'){
+        $data = $pdo->query("SELECT * FROM files WHERE id = '{$send_vip['msg_id']}' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        if($data && isset($data['ads_type']) && $data['ads_type']=='vip'){
             bot('sendPhoto', [
                 'chat_id'=>$users['id'],
                 'photo'=>$data['cover'],
@@ -122,14 +126,14 @@ if($send_vip['type']=='source_vip'){
     ]);
         }
     }
-    $cn = $send['count']+100;
+    $cn = $send_vip['count']+100;
     $pdo->exec("UPDATE send_all SET count = '$cn' WHERE id = '86' LIMIT 1");
-    if($send['count'] + 100 >= $pdo->query("SELECT id FROM users")->rowcount()){
-    $cn = $pdo->query("SELECT id FROM users")->rowcount()-$send['count'];
-    $cn = $send['count'] + $cn;
+    if($send_vip['count'] + 100 >= $pdo->query("SELECT id FROM users")->rowcount()){
+    $cn = $pdo->query("SELECT id FROM users")->rowcount()-$send_vip['count'];
+    $cn = $send_vip['count'] + $cn;
     $pdo->exec("UPDATE send_all SET count = '$cn' WHERE id = '86' LIMIT 1");
     }
-    if($send['count'] == $pdo->query("SELECT id FROM users")->rowcount()){
+    if($send_vip['count'] >= $pdo->query("SELECT id FROM users")->rowcount()){
         $pdo->exec("UPDATE send_all SET type = '-', count = '0', from_id = '0', msg_id = '0' WHERE id = '86' LIMIT 1");
     }
 }

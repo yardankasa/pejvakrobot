@@ -130,6 +130,8 @@ CREATE TABLE IF NOT EXISTS `panel` (
     `admins` TEXT COMMENT 'لیست مدیران (^ جدا شده)',
     `power` TINYINT(1) DEFAULT 1 COMMENT 'وضعیت ربات: 0=خاموش, 1=روشن',
     `luckwheel_status` TINYINT(1) DEFAULT 1 COMMENT 'وضعیت گردونه شانس: 0=خاموش, 1=روشن',
+    `time` INT(11) DEFAULT 0 COMMENT 'زمان ارسال سورس رایگان بعدی (timestamp)',
+    `time_vip` INT(11) DEFAULT 0 COMMENT 'زمان ارسال سورس VIP بعدی (timestamp)',
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_persian_ci COMMENT='تنظیمات پنل مدیریت';
 
@@ -365,6 +367,20 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO `send_all` (`id`, `type`, `count`, `from_id`, `msg_id`, `sendtype`, `text`, `media`, `caption`, `value`) 
 VALUES (85, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
 ON DUPLICATE KEY UPDATE `id` = 85;
+
+INSERT INTO `send_all` (`id`, `type`, `count`, `from_id`, `msg_id`, `sendtype`, `text`, `media`, `caption`, `value`) 
+VALUES (86, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+ON DUPLICATE KEY UPDATE `id` = 86;
+
+-- ============================================
+-- مهاجرت: افزودن ستون‌های time و time_vip به panel (برای دیتابیس‌های موجود)
+-- ============================================
+-- در صورت خطای "Unknown column 'time'" این دستورات را اجرا کنید:
+-- ALTER TABLE `panel` ADD COLUMN IF NOT EXISTS `time` INT(11) DEFAULT 0 COMMENT 'زمان ارسال سورس رایگان بعدی (timestamp)';
+-- ALTER TABLE `panel` ADD COLUMN IF NOT EXISTS `time_vip` INT(11) DEFAULT 0 COMMENT 'زمان ارسال سورس VIP بعدی (timestamp)';
+-- توجه: MySQL قدیمی‌تر IF NOT EXISTS را برای ADD COLUMN پشتیبانی نمی‌کند. در آن صورت:
+-- ALTER TABLE `panel` ADD COLUMN `time` INT(11) DEFAULT 0;
+-- ALTER TABLE `panel` ADD COLUMN `time_vip` INT(11) DEFAULT 0;
 
 -- ============================================
 -- نکات مهم:
